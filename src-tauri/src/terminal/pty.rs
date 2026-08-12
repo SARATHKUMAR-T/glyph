@@ -28,8 +28,11 @@ pub fn spawn_shell(session_id: &str, request: CreateTerminalRequest) -> Result<S
     let mut command = CommandBuilder::new(&shell);
     command.env("TERM", "xterm-256color");
     command.env("COLORTERM", "truecolor");
-    command.env("COLUMNS", size.cols.to_string());
-    command.env("LINES", size.rows.to_string());
+    command.env("LANG", "en_US.UTF-8");
+    command.env("LC_ALL", "en_US.UTF-8");
+    command.env("LC_CTYPE", "en_US.UTF-8");
+    command.env("TERM_PROGRAM", "Glyph");
+    command.env("TERM_PROGRAM_VERSION", "0.1.0");
     command.env("NOTHING_TERMINAL", "1");
     command.env("NOTHING_TERMINAL_SESSION", session_id);
 

@@ -21,17 +21,26 @@ export async function createTerminalSession(request: CreateTerminalRequest) {
 
 export async function writeTerminalData(sessionId: string, data: string) {
   ensureTauriRuntime();
-  return invoke<void>("write_terminal", { sessionId, data });
+  return invoke<void>("write_terminal", { sessionId, data }).catch((err: unknown) => {
+    console.error("[write_terminal] IPC error:", err, "sessionId:", sessionId);
+    throw err;
+  });
 }
 
 export async function resizeTerminalSession(sessionId: string, request: ResizeTerminalRequest) {
   ensureTauriRuntime();
-  return invoke<void>("resize_terminal", { sessionId, request });
+  return invoke<void>("resize_terminal", { sessionId, request }).catch((err: unknown) => {
+    console.error("[resize_terminal] IPC error:", err, "sessionId:", sessionId);
+    throw err;
+  });
 }
 
 export async function closeTerminalSession(sessionId: string) {
   ensureTauriRuntime();
-  return invoke<void>("close_terminal", { sessionId });
+  return invoke<void>("close_terminal", { sessionId }).catch((err: unknown) => {
+    console.error("[close_terminal] IPC error:", err, "sessionId:", sessionId);
+    throw err;
+  });
 }
 
 function ensureTauriRuntime() {

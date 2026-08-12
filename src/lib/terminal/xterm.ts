@@ -5,6 +5,7 @@ import type { CursorStyleOption } from "../../hooks/useTerminalSettings";
 type CreateXtermOptions = {
   cursorStyle?: CursorStyleOption;
   cursorBlink?: boolean;
+  fontSize?: number;
 };
 
 export function createNothingXterm(options?: CreateXtermOptions) {
@@ -12,10 +13,10 @@ export function createNothingXterm(options?: CreateXtermOptions) {
     allowTransparency: true,
     convertEol: true,
     cursorBlink: options?.cursorBlink ?? true,
-    cursorStyle: options?.cursorStyle ?? "block",
+    cursorStyle: options?.cursorStyle ?? "bar",
     drawBoldTextInBrightColors: false,
     fontFamily: TERMINAL_FONT_FAMILY,
-    fontSize: 14,
+    fontSize: options?.fontSize ?? 14,
     letterSpacing: 0,
     lineHeight: 1.18,
     macOptionIsMeta: false,

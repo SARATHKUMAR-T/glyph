@@ -12,19 +12,21 @@ export type TerminalSettings = {
   dotColor: string;
   cursorStyle: CursorStyleOption;
   cursorBlink: boolean;
+  fontSize: number;
 };
 
 const DEFAULT_SETTINGS: TerminalSettings = {
-  matrixStyle: "static-grid",
+  matrixStyle: "matrix-rain",
   matrixSpeed: "normal",
   interactiveGlow: true,
-  dotOpacity: 0.45,
-  dotColor: "#8c8c91",
-  cursorStyle: "block",
+  dotOpacity: 0.8,
+  dotColor: "#00ff66",
+  cursorStyle: "bar",
   cursorBlink: true,
+  fontSize: 14,
 };
 
-const STORAGE_KEY = "glyph_terminal_settings_v5";
+const STORAGE_KEY = "glyph_terminal_settings_v6";
 
 export function useTerminalSettings() {
   const [settings, setSettings] = useState<TerminalSettings>(() => {

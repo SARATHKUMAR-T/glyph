@@ -31,7 +31,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingsConfig = {
   copy: { key: "c", ctrl: true, alt: false, shift: true, meta: false },
   paste: { key: "v", ctrl: true, alt: false, shift: true, meta: false },
   search: { key: "f", ctrl: true, alt: false, shift: true, meta: false },
-  select_all: { key: "a", ctrl: true, alt: false, shift: false, meta: false },
+  select_all: { key: "a", ctrl: true, alt: false, shift: true, meta: false },
   toggle_settings: { key: ",", ctrl: true, alt: false, shift: false, meta: false },
 };
 
@@ -48,7 +48,7 @@ export const ACTION_LABELS: Record<ShortcutAction, { label: string; description:
   toggle_settings: { label: "Toggle Settings", description: "Open or close Settings panel" },
 };
 
-const STORAGE_KEY = "glyph_keybindings_v2";
+const STORAGE_KEY = "glyph_keybindings_v3";
 
 export function formatKeyCombo(combo: KeyCombo): string {
   const parts: string[] = [];

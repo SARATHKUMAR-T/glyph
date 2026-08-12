@@ -6,7 +6,7 @@ use crate::terminal::session::{
     TerminalSessionInfo,
 };
 
-#[tauri::command]
+#[tauri::command(rename_all = "camelCase")]
 pub fn create_terminal(
     app: AppHandle,
     manager: State<'_, TerminalManager>,
@@ -15,7 +15,7 @@ pub fn create_terminal(
     manager.create_terminal(app, request).map_err(Into::into)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "camelCase")]
 pub fn write_terminal(
     manager: State<'_, TerminalManager>,
     session_id: String,
@@ -26,7 +26,7 @@ pub fn write_terminal(
         .map_err(Into::into)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "camelCase")]
 pub fn resize_terminal(
     manager: State<'_, TerminalManager>,
     session_id: String,
@@ -37,7 +37,7 @@ pub fn resize_terminal(
         .map_err(Into::into)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "camelCase")]
 pub fn close_terminal(
     manager: State<'_, TerminalManager>,
     session_id: String,
@@ -45,7 +45,7 @@ pub fn close_terminal(
     manager.close_terminal(&session_id).map_err(Into::into)
 }
 
-#[tauri::command]
+#[tauri::command(rename_all = "camelCase")]
 pub fn list_sessions(
     manager: State<'_, TerminalManager>,
 ) -> Result<Vec<TerminalSessionInfo>, TerminalErrorPayload> {

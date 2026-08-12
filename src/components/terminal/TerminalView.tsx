@@ -85,6 +85,7 @@ export function TerminalView({
   const searchAddonRef = useRef<SearchAddon | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const lastSizeRef = useRef({ cols: 0, rows: 0 });
+  const lastResizedSessionIdRef = useRef<string | null>(null);
   const mockSessionRef = useRef<ReturnType<typeof attachMockShell> | null>(null);
   const keybindingsRef = useRef<KeybindingsConfig>(keybindings);
   const [query, setQuery] = useState("");
@@ -126,15 +127,21 @@ export function TerminalView({
     }
 
     const { cols, rows } = terminal;
-    if (cols === lastSizeRef.current.cols && rows === lastSizeRef.current.rows) {
+    const sessionId = sessionIdRef.current;
+
+    if (
+      cols === lastSizeRef.current.cols &&
+      rows === lastSizeRef.current.rows &&
+      lastResizedSessionIdRef.current === sessionId
+    ) {
       return;
     }
 
     lastSizeRef.current = { cols, rows };
     propsRef.current.onSessionResize(tab.clientId, cols, rows);
 
-    const sessionId = sessionIdRef.current;
     if (sessionId && isTauriRuntime()) {
+      lastResizedSessionIdRef.current = sessionId;
       void resizeTerminalSession(sessionId, { cols, rows }).catch((error: unknown) =>
         propsRef.current.onSessionStatus(tab.clientId, "error", formatError(error)),
       );
@@ -150,6 +157,7 @@ export function TerminalView({
     const terminal = createNothingXterm({
       cursorStyle: settings?.cursorStyle,
       cursorBlink: settings?.cursorBlink,
+      fontSize: settings?.fontSize,
     });
     const fitAddon = new FitAddon();
     const searchAddon = new SearchAddon();
@@ -301,6 +309,7 @@ export function TerminalView({
       const initialCols = Math.max(terminal.cols || 80, 20);
       const initialRows = Math.max(terminal.rows || 24, 5);
       lastSizeRef.current = { cols: initialCols, rows: initialRows };
+      console.log("[TerminalView] bootTerminal start", tab.clientId, { isTauri: isTauriRuntime() });
 
       if (!isTauriRuntime()) {
         // Run mock interactive shell in browser dev mode
@@ -369,13 +378,16 @@ export function TerminalView({
           cols: initialCols,
           rows: initialRows,
         });
+        console.log("[TerminalView] createTerminalSession resolved:", info);
 
         if (disposed) {
+          console.warn("[TerminalView] disposed after session created — cleaning up");
           return;
         }
 
         assignedId = info.sessionId;
         sessionIdRef.current = info.sessionId;
+        fitAndResize();
 
         // Flush any output received before createTerminalSession IPC resolved
         if (pendingOutput.length > 0) {
@@ -436,8 +448,12 @@ export function TerminalView({
     if (terminal && settings) {
       terminal.options.cursorStyle = settings.cursorStyle;
       terminal.options.cursorBlink = settings.cursorBlink;
+      if (settings.fontSize && terminal.options.fontSize !== settings.fontSize) {
+        terminal.options.fontSize = settings.fontSize;
+        fitAndResize();
+      }
     }
-  }, [settings?.cursorBlink, settings?.cursorStyle]);
+  }, [fitAndResize, settings?.cursorBlink, settings?.cursorStyle, settings?.fontSize]);
 
   useEffect(() => {
     if (searchOpen) {

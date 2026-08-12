@@ -9,6 +9,7 @@ import {
   type KeybindingsConfig,
   type ShortcutAction,
 } from "../../hooks/useKeybindings";
+import { CustomSelect } from "../ui/CustomSelect";
 
 type SettingsProps = {
   open: boolean;
@@ -27,6 +28,30 @@ const COLOR_SWATCHES = [
   { label: "Neon Purple", color: "#b840ff" },
   { label: "Amber Glow", color: "#ffb000" },
 ];
+
+const PATTERN_OPTIONS: { label: string; value: MatrixStyle }[] = [
+  { label: "Matrix Digital Rain", value: "matrix-rain" },
+  { label: "Red Glyph Pulse", value: "red-pulse" },
+  { label: "Static Dot Grid", value: "static-grid" },
+  { label: "Nothing OS Grid", value: "nothing-grid" },
+];
+
+const SPEED_OPTIONS: { label: string; value: MatrixSpeed }[] = [
+  { label: "Slow", value: "slow" },
+  { label: "Normal", value: "normal" },
+  { label: "Fast", value: "fast" },
+];
+
+const CURSOR_OPTIONS: { label: string; value: CursorStyleOption }[] = [
+  { label: "Glowing Bar", value: "bar" },
+  { label: "Glyph Solid Block", value: "block" },
+  { label: "Underline", value: "underline" },
+];
+
+const FONT_SIZE_OPTIONS = [10, 11, 12, 13, 14, 15, 16, 17, 18, 20, 22, 24, 28].map((s) => ({
+  label: `${s}px`,
+  value: s,
+}));
 
 export function Settings({
   open,
@@ -127,16 +152,11 @@ export function Settings({
         <h2>Matrix Dot Background</h2>
         <div className="settings-row">
           <span>Pattern</span>
-          <select
-            className="settings-select"
+          <CustomSelect
             value={settings.matrixStyle}
-            onChange={(e) => onUpdateSettings({ matrixStyle: e.target.value as MatrixStyle })}
-          >
-            <option value="red-pulse">Red Glyph Pulse</option>
-            <option value="static-grid">Static Dot Grid</option>
-            <option value="matrix-rain">Matrix Digital Rain</option>
-            <option value="nothing-grid">Nothing OS Grid</option>
-          </select>
+            options={PATTERN_OPTIONS}
+            onChange={(val) => onUpdateSettings({ matrixStyle: val })}
+          />
         </div>
 
         <div className="settings-row">
@@ -168,15 +188,11 @@ export function Settings({
 
         <div className="settings-row">
           <span>Speed</span>
-          <select
-            className="settings-select"
+          <CustomSelect
             value={settings.matrixSpeed}
-            onChange={(e) => onUpdateSettings({ matrixSpeed: e.target.value as MatrixSpeed })}
-          >
-            <option value="slow">Slow</option>
-            <option value="normal">Normal</option>
-            <option value="fast">Fast</option>
-          </select>
+            options={SPEED_OPTIONS}
+            onChange={(val) => onUpdateSettings({ matrixSpeed: val })}
+          />
         </div>
 
         <div className="settings-row">
@@ -208,15 +224,11 @@ export function Settings({
         <h2>Glyph Cursor</h2>
         <div className="settings-row">
           <span>Style</span>
-          <select
-            className="settings-select"
+          <CustomSelect
             value={settings.cursorStyle}
-            onChange={(e) => onUpdateSettings({ cursorStyle: e.target.value as CursorStyleOption })}
-          >
-            <option value="block">Glyph Solid Block</option>
-            <option value="bar">Glowing Bar</option>
-            <option value="underline">Underline</option>
-          </select>
+            options={CURSOR_OPTIONS}
+            onChange={(val) => onUpdateSettings({ cursorStyle: val })}
+          />
         </div>
         <div className="settings-row">
           <span>Blink Animation</span>
@@ -250,7 +262,11 @@ export function Settings({
         </div>
         <div className="settings-row">
           <span>Size</span>
-          <strong>14</strong>
+          <CustomSelect
+            value={settings.fontSize || 14}
+            options={FONT_SIZE_OPTIONS}
+            onChange={(val) => onUpdateSettings({ fontSize: val })}
+          />
         </div>
       </div>
 

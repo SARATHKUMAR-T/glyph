@@ -80,11 +80,7 @@
 }
 
 .xterm,
-.xterm-viewport,
-.xterm-screen,
-.xterm-screen canvas,
-.xterm-rows,
-.xterm-text-layer {
+.xterm-viewport {
   background-color: transparent !important;
 }
 

@@ -64,8 +64,19 @@ impl Osc133Parser {
     fn trim_unmatched_tail(&mut self) {
         const KEEP: usize = 16;
         if self.buffer.len() > KEEP {
-            let keep_from = self.buffer.len() - KEEP;
-            self.buffer.drain(..keep_from);
+            let target = self.buffer.len() - KEEP;
+            let keep_from = self
+                .buffer
+                .char_indices()
+                .map(|(idx, _)| idx)
+                .find(|&idx| idx >= target)
+                .unwrap_or(self.buffer.len());
+
+            if keep_from > 0 && keep_from < self.buffer.len() {
+                self.buffer.drain(..keep_from);
+            } else if keep_from >= self.buffer.len() {
+                self.buffer.clear();
+            }
         }
     }
 
@@ -142,6 +153,13 @@ mod tests {
         let mut parser = Osc133Parser::default();
         let events = parser.feed("\u{1b}]133;X\u{7}");
 
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn handles_multibyte_utf8_in_trim_unmatched_tail() {
+        let mut parser = Osc133Parser::default();
+        let events = parser.feed("Hello World! 🤖😊🚀 Quantum Code Terminal Test Stream with emojis 🤖");
         assert!(events.is_empty());
     }
 }
