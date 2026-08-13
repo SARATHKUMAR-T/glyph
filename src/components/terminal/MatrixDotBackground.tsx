@@ -101,9 +101,7 @@ export function MatrixDotBackground({
     }
 
     let waveTime = 0;
-
-    const activeColor = style === "red-pulse" && dotColor === "#8c8c91" ? "#ff3030" : dotColor;
-    const { r, g, b } = hexToRgb(activeColor);
+    const { r, g, b } = hexToRgb(dotColor);
 
     const renderFrame = () => {
       ctx.clearRect(0, 0, width, height);
@@ -112,53 +110,7 @@ export function MatrixDotBackground({
       rows = Math.ceil(height / spacing);
       const mouse = mouseRef.current;
 
-      if (style === "red-pulse") {
-        // High-energy Red / Custom Glyph Pulse with glowing concentric waves
-        waveTime += 0.045 * speedMultiplier;
-        const centerX = width / 2;
-        const centerY = height / 2;
-
-        for (let rIdx = 0; rIdx < rows; rIdx++) {
-          for (let cIdx = 0; cIdx < columns; cIdx++) {
-            const px = cIdx * spacing + spacing / 2;
-            const py = rIdx * spacing + spacing / 2;
-
-            const dx = px - centerX;
-            const dy = py - centerY;
-            const distFromCenter = Math.sqrt(dx * dx + dy * dy);
-
-            // Pulsing wave equation
-            const wave = Math.sin(distFromCenter * 0.015 - waveTime);
-            const pulseIntensity = Math.pow(Math.max(0, wave), 3);
-
-            let mouseGlow = 0;
-            if (interactive && mouse.active) {
-              const mdx = px - mouse.x;
-              const mdy = py - mouse.y;
-              const mDist = Math.sqrt(mdx * mdx + mdy * mdy);
-              if (mDist < 140) {
-                mouseGlow = 1 - mDist / 140;
-              }
-            }
-
-            const alpha = Math.min(1, (0.15 + pulseIntensity * 0.75 + mouseGlow * 0.6) * opacity);
-            const radius = 1.2 + pulseIntensity * 1.8 + mouseGlow * 1.5;
-
-            ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
-            ctx.beginPath();
-            ctx.arc(px, py, radius, 0, Math.PI * 2);
-
-            if (pulseIntensity > 0.3 || mouseGlow > 0.3) {
-              ctx.shadowColor = `rgba(${r}, ${g}, ${b}, ${Math.min(1, alpha + 0.3)})`;
-              ctx.shadowBlur = (6 * pulseIntensity + 8 * mouseGlow);
-              ctx.fill();
-              ctx.shadowBlur = 0;
-            } else {
-              ctx.fill();
-            }
-          }
-        }
-      } else if (style === "static-grid") {
+      if (style === "static-grid") {
         // Elegant static dot matrix with custom color support
         for (let rIdx = 0; rIdx < rows; rIdx++) {
           for (let cIdx = 0; cIdx < columns; cIdx++) {

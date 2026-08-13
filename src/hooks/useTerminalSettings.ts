@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-export type MatrixStyle = "static-grid" | "nothing-grid" | "matrix-rain" | "red-pulse";
+export type MatrixStyle = "static-grid" | "nothing-grid" | "matrix-rain";
 export type MatrixSpeed = "slow" | "normal" | "fast";
 export type CursorStyleOption = "block" | "bar" | "underline";
 
@@ -26,14 +26,18 @@ const DEFAULT_SETTINGS: TerminalSettings = {
   fontSize: 14,
 };
 
-const STORAGE_KEY = "glyph_terminal_settings_v6";
+const STORAGE_KEY = "glyph_terminal_settings_v7";
 
 export function useTerminalSettings() {
   const [settings, setSettings] = useState<TerminalSettings>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        if (parsed.matrixStyle === "red-pulse") {
+          parsed.matrixStyle = "matrix-rain";
+        }
+        return { ...DEFAULT_SETTINGS, ...parsed };
       }
     } catch {
       // Fall back to defaults
@@ -50,14 +54,7 @@ export function useTerminalSettings() {
   }, [settings]);
 
   const updateSettings = useCallback((patch: Partial<TerminalSettings>) => {
-    setSettings((prev) => {
-      const next = { ...prev, ...patch };
-      // If switching to red-pulse pattern and color wasn't customized, default to vibrant Glyph Red #ff3030
-      if (patch.matrixStyle === "red-pulse" && prev.dotColor === "#8c8c91") {
-        next.dotColor = "#ff3030";
-      }
-      return next;
-    });
+    setSettings((prev) => ({ ...prev, ...patch }));
   }, []);
 
   return {

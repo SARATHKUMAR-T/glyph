@@ -31,7 +31,6 @@ const COLOR_SWATCHES = [
 
 const PATTERN_OPTIONS: { label: string; value: MatrixStyle }[] = [
   { label: "Matrix Digital Rain", value: "matrix-rain" },
-  { label: "Red Glyph Pulse", value: "red-pulse" },
   { label: "Static Dot Grid", value: "static-grid" },
   { label: "Nothing OS Grid", value: "nothing-grid" },
 ];
