@@ -26,7 +26,6 @@ import { matchesKeyCombo, type KeybindingsConfig } from "../../hooks/useKeybindi
 import type { TerminalSettings } from "../../hooks/useTerminalSettings";
 
 import { TerminalBlock } from "./TerminalBlock";
-import { TerminalStatus as TerminalStatusBar } from "./TerminalStatus";
 
 type TerminalViewProps = {
   active: boolean;
@@ -507,8 +506,6 @@ export function TerminalView({
       </nav>
 
       <section className="terminal-output" aria-label="Terminal stream">
-        <TerminalStatusBar tab={tab} />
-
         {searchOpen && (
           <div className="terminal-search">
             <input
