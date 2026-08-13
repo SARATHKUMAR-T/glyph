@@ -74,14 +74,47 @@
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
-  padding: 14px 24px 14px 18px;
+  padding: 10px 0 10px 14px !important;
   overflow: hidden;
   background: transparent !important;
 }
 
-.xterm,
+.xterm {
+  padding: 0 !important;
+  background-color: transparent !important;
+}
+
 .xterm-viewport {
   background-color: transparent !important;
+  scrollbar-width: none !important;
+}
+
+/* Thin 5px Red Glow Scrollbar Aligned at Right Edge */
+.xterm .xterm-viewport::-webkit-scrollbar,
+.xterm-viewport::-webkit-scrollbar,
+::-webkit-scrollbar {
+  width: 5px !important;
+  height: 5px !important;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-track,
+.xterm-viewport::-webkit-scrollbar-track,
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.15) !important;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb,
+.xterm-viewport::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 48, 48, 0.45) !important;
+  border-radius: 3px !important;
+  transition: background 140ms ease !important;
+}
+
+.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover,
+.xterm-viewport::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:hover {
+  background: var(--nothing-red-bright) !important;
 }
 
 .xterm .xterm-screen {

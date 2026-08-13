@@ -94,13 +94,22 @@
 .window-control,
 .tabs-new,
 .terminal-tab-close {
-  width: 30px;
-  height: 30px;
-  display: grid;
-  place-items: center;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 6px;
   font-family: var(--nothing-mono);
   line-height: 1;
+  transition: all 120ms ease;
+}
+
+.title-action svg,
+.window-control svg {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .title-action:hover,
@@ -176,30 +185,29 @@
 
 .tabs-new {
   flex-shrink: 0;
-  width: 30px;
-  height: 30px;
-  border: 1px dashed var(--nothing-line);
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--nothing-line);
   border-radius: 6px;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.04);
   color: var(--nothing-gray-300);
-  font-family: var(--nothing-mono);
-  font-size: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0;
   cursor: pointer;
+  margin-left: 2px;
   transition: all 120ms ease;
 }
 
-.tabs-new-label {
-  display: none;
+.tabs-new svg {
+  width: 18px;
+  height: 18px;
+  display: block;
 }
 
 .tabs-new:hover {
-  border-color: rgba(255, 48, 48, 0.6);
-  border-style: solid;
-  background: rgba(255, 48, 48, 0.15);
+  border-color: var(--nothing-red-bright);
+  background: rgba(255, 48, 48, 0.18);
   color: var(--nothing-white);
 }
 
@@ -477,6 +485,12 @@
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.92);
   padding: 4px;
   scrollbar-width: thin;
+}
+
+.custom-select-dropdown.is-up {
+  top: auto;
+  bottom: calc(100% + 4px);
+  box-shadow: 0 -12px 32px rgba(0, 0, 0, 0.92);
 }
 
 .custom-select-item {

@@ -95,6 +95,13 @@ export function TerminalView({
     onSessionResize,
     onSemanticEvent,
     onTitleChange,
+    onNextTab,
+    onPrevTab,
+    onCloseTerminal,
+    onNewTerminal,
+    onNewWindow,
+    onSearch,
+    onToggleSettings,
   });
 
   useEffect(() => {
@@ -104,6 +111,13 @@ export function TerminalView({
       onSessionResize,
       onSemanticEvent,
       onTitleChange,
+      onNextTab,
+      onPrevTab,
+      onCloseTerminal,
+      onNewTerminal,
+      onNewWindow,
+      onSearch,
+      onToggleSettings,
     };
   });
 
@@ -119,7 +133,13 @@ export function TerminalView({
     }
 
     try {
-      fitAddon.fit();
+      const dims = fitAddon.proposeDimensions();
+      if (dims && dims.cols > 10) {
+        terminal.resize(dims.cols - 2, dims.rows);
+      } else {
+        fitAddon.fit();
+      }
+      terminal.scrollToBottom();
     } catch (error) {
       propsRef.current.onSessionStatus(tab.clientId, "error", formatError(error));
       return;
@@ -249,49 +269,49 @@ export function TerminalView({
       if (matchesKeyCombo(event, bindings.new_tab)) {
         event.preventDefault();
         event.stopPropagation();
-        onNewTerminal?.();
+        propsRef.current.onNewTerminal?.();
         return false;
       }
 
       if (matchesKeyCombo(event, bindings.new_window)) {
         event.preventDefault();
         event.stopPropagation();
-        onNewWindow?.();
+        propsRef.current.onNewWindow?.();
         return false;
       }
 
       if (matchesKeyCombo(event, bindings.close_tab)) {
         event.preventDefault();
         event.stopPropagation();
-        onCloseTerminal?.();
+        propsRef.current.onCloseTerminal?.();
         return false;
       }
 
       if (matchesKeyCombo(event, bindings.next_tab)) {
         event.preventDefault();
         event.stopPropagation();
-        onNextTab?.();
+        propsRef.current.onNextTab?.();
         return false;
       }
 
       if (matchesKeyCombo(event, bindings.prev_tab)) {
         event.preventDefault();
         event.stopPropagation();
-        onPrevTab?.();
+        propsRef.current.onPrevTab?.();
         return false;
       }
 
       if (matchesKeyCombo(event, bindings.search)) {
         event.preventDefault();
         event.stopPropagation();
-        onSearch?.();
+        propsRef.current.onSearch?.();
         return false;
       }
 
       if (matchesKeyCombo(event, bindings.toggle_settings)) {
         event.preventDefault();
         event.stopPropagation();
-        onToggleSettings?.();
+        propsRef.current.onToggleSettings?.();
         return false;
       }
 
@@ -437,8 +457,12 @@ export function TerminalView({
 
   useEffect(() => {
     if (active) {
-      fitAndResize();
-      terminalRef.current?.focus();
+      const timer = setTimeout(() => {
+        fitAndResize();
+        terminalRef.current?.scrollToBottom();
+        terminalRef.current?.focus();
+      }, 25);
+      return () => clearTimeout(timer);
     }
   }, [active, fitAndResize]);
 
@@ -456,8 +480,11 @@ export function TerminalView({
 
   useEffect(() => {
     if (searchOpen) {
-      searchInputRef.current?.focus();
-      searchInputRef.current?.select();
+      const timer = setTimeout(() => {
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+      }, 30);
+      return () => clearTimeout(timer);
     } else {
       setQuery("");
       searchAddonRef.current?.clearDecorations();
@@ -507,7 +534,11 @@ export function TerminalView({
 
       <section className="terminal-output" aria-label="Terminal stream">
         {searchOpen && (
-          <div className="terminal-search">
+          <div
+            className="terminal-search"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
             <input
               ref={searchInputRef}
               type="text"
@@ -516,6 +547,7 @@ export function TerminalView({
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
               onKeyDown={(e) => {
+                e.stopPropagation();
                 if (e.key === "Enter") {
                   if (e.shiftKey) {
                     handleSearchPrevious();

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { SHELL_INTEGRATION_SNIPPET, TERMINAL_FONT_FAMILY } from "../../lib/constants";
+import { TERMINAL_FONT_FAMILY } from "../../lib/constants";
 import type { CursorStyleOption, MatrixSpeed, MatrixStyle, TerminalSettings } from "../../hooks/useTerminalSettings";
 import {
   ACTION_LABELS,
@@ -60,14 +60,7 @@ export function Settings({
   onUpdateKeybinding,
   onResetKeybindings,
 }: SettingsProps) {
-  const [copied, setCopied] = useState(false);
   const [recordingAction, setRecordingAction] = useState<ShortcutAction | null>(null);
-
-  const copySnippet = async () => {
-    await navigator.clipboard?.writeText(SHELL_INTEGRATION_SNIPPET);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1400);
-  };
 
   useEffect(() => {
     if (!recordingAction) return;
@@ -242,18 +235,6 @@ export function Settings({
       </div>
 
       <div className="settings-section">
-        <h2>Runtime</h2>
-        <div className="settings-row">
-          <span>Shell</span>
-          <strong>$SHELL</strong>
-        </div>
-        <div className="settings-row">
-          <span>TERM</span>
-          <strong>xterm-256color</strong>
-        </div>
-      </div>
-
-      <div className="settings-section">
         <h2>Type</h2>
         <div className="settings-row">
           <span>Font</span>
@@ -267,14 +248,6 @@ export function Settings({
             onChange={(val) => onUpdateSettings({ fontSize: val })}
           />
         </div>
-      </div>
-
-      <div className="settings-section">
-        <h2>OSC 133 Shell Integration</h2>
-        <code className="settings-code">{SHELL_INTEGRATION_SNIPPET}</code>
-        <button className="settings-copy" type="button" onClick={() => void copySnippet()}>
-          {copied ? "Copied" : "Copy"}
-        </button>
       </div>
     </aside>
   );

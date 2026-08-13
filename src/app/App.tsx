@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 import { Settings } from "../components/settings/Settings";
@@ -90,6 +90,7 @@ export function App() {
     if (isTauriRuntime()) {
       const windowLabel = `glyph-win-${Date.now()}`;
       const webview = new WebviewWindow(windowLabel, {
+        url: "index.html",
         title: "Glyph",
         width: 1180,
         height: 760,
@@ -186,25 +187,30 @@ export function App() {
     [ingestSemanticEvent],
   );
 
+  const tabsRef = useRef(tabs);
+  useEffect(() => {
+    tabsRef.current = tabs;
+  }, [tabs]);
+
   const handleNextTab = useCallback(() => {
-    setTabs((currentTabs) => {
-      if (currentTabs.length <= 1) return currentTabs;
-      const currentIndex = currentTabs.findIndex((t) => t.clientId === activeTabId);
-      const nextIndex = (currentIndex + 1) % currentTabs.length;
-      setActiveTabId(currentTabs[nextIndex].clientId);
-      return currentTabs;
+    const currentTabs = tabsRef.current;
+    if (currentTabs.length <= 1) return;
+    setActiveTabId((currentActiveId) => {
+      const currentIndex = currentTabs.findIndex((t) => t.clientId === currentActiveId);
+      const nextIndex = currentIndex < 0 || currentIndex >= currentTabs.length - 1 ? 0 : currentIndex + 1;
+      return currentTabs[nextIndex].clientId;
     });
-  }, [activeTabId]);
+  }, []);
 
   const handlePrevTab = useCallback(() => {
-    setTabs((currentTabs) => {
-      if (currentTabs.length <= 1) return currentTabs;
-      const currentIndex = currentTabs.findIndex((t) => t.clientId === activeTabId);
-      const prevIndex = (currentIndex - 1 + currentTabs.length) % currentTabs.length;
-      setActiveTabId(currentTabs[prevIndex].clientId);
-      return currentTabs;
+    const currentTabs = tabsRef.current;
+    if (currentTabs.length <= 1) return;
+    setActiveTabId((currentActiveId) => {
+      const currentIndex = currentTabs.findIndex((t) => t.clientId === currentActiveId);
+      const prevIndex = currentIndex <= 0 ? currentTabs.length - 1 : currentIndex - 1;
+      return currentTabs[prevIndex].clientId;
     });
-  }, [activeTabId]);
+  }, []);
 
   useKeyboardShortcuts({
     keybindings,
@@ -228,7 +234,7 @@ export function App() {
         dotColor={settings.dotColor}
       />
       <TitleBar
-        onNewTerminal={addTerminal}
+        onNewWindow={openNewWindow}
         onSearch={() => setSearchOpen(true)}
         onToggleSettings={() => setSettingsOpen((open) => !open)}
       />

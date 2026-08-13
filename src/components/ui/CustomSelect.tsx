@@ -10,6 +10,7 @@ type CustomSelectProps<T extends string | number> = {
   options: CustomOption<T>[];
   onChange: (value: T) => void;
   className?: string;
+  direction?: "auto" | "up" | "down";
 };
 
 export function CustomSelect<T extends string | number>({
@@ -17,11 +18,28 @@ export function CustomSelect<T extends string | number>({
   options,
   onChange,
   className = "",
+  direction = "auto",
 }: CustomSelectProps<T>) {
   const [open, setOpen] = useState(false);
+  const [dropUp, setDropUp] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
 
   const selectedOption = options.find((opt) => opt.value === value) ?? options[0];
+
+  const handleToggle = () => {
+    if (!open && containerRef.current) {
+      if (direction === "up") {
+        setDropUp(true);
+      } else if (direction === "down") {
+        setDropUp(false);
+      } else {
+        const rect = containerRef.current.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        setDropUp(spaceBelow < 240);
+      }
+    }
+    setOpen((prev) => !prev);
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -51,7 +69,7 @@ export function CustomSelect<T extends string | number>({
       <button
         type="button"
         className={open ? "custom-select-trigger is-open" : "custom-select-trigger"}
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={handleToggle}
       >
         <span className="custom-select-value-text">{selectedOption?.label}</span>
         <svg
@@ -70,7 +88,7 @@ export function CustomSelect<T extends string | number>({
       </button>
 
       {open && (
-        <div className="custom-select-dropdown" role="listbox">
+        <div className={dropUp ? "custom-select-dropdown is-up" : "custom-select-dropdown"} role="listbox">
           {options.map((opt) => {
             const isSelected = opt.value === value;
             return (

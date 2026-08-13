@@ -31,7 +31,9 @@ export function WindowControls() {
         type="button"
         onClick={() => void runWindowAction("minimize")}
       >
-        -
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
       </button>
       <button
         aria-label="Maximize or Restore Window"
@@ -40,7 +42,9 @@ export function WindowControls() {
         type="button"
         onClick={() => void runWindowAction("toggleMaximize")}
       >
-        □
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="4" y="4" width="16" height="16" rx="2" />
+        </svg>
       </button>
       <button
         aria-label="Close Window (Ctrl+Shift+W)"
@@ -49,7 +53,10 @@ export function WindowControls() {
         type="button"
         onClick={() => void runWindowAction("close")}
       >
-        ×
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
       </button>
     </div>
   );

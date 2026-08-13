@@ -48,7 +48,7 @@ export const ACTION_LABELS: Record<ShortcutAction, { label: string; description:
   toggle_settings: { label: "Toggle Settings", description: "Open or close Settings panel" },
 };
 
-const STORAGE_KEY = "glyph_keybindings_v3";
+const STORAGE_KEY = "glyph_keybindings_v4";
 
 export function formatKeyCombo(combo: KeyCombo): string {
   const parts: string[] = [];
@@ -69,8 +69,26 @@ export function formatKeyCombo(combo: KeyCombo): string {
 export function matchesKeyCombo(event: KeyboardEvent, combo: KeyCombo): boolean {
   const eventKey = event.key.toLowerCase();
   const targetKey = combo.key.toLowerCase();
+  const eventCode = event.code.toLowerCase();
 
-  const keyMatches = eventKey === targetKey || event.code.toLowerCase() === `key${targetKey}`;
+  let keyMatches = false;
+
+  if (targetKey === "tab") {
+    keyMatches =
+      eventKey === "tab" ||
+      eventKey === "backtab" ||
+      eventKey === "iso_left_tab" ||
+      eventCode === "tab";
+  } else if (targetKey === "escape" || targetKey === "esc") {
+    keyMatches = eventKey === "escape" || eventCode === "escape";
+  } else {
+    keyMatches =
+      eventKey === targetKey ||
+      eventCode === targetKey ||
+      eventCode === `key${targetKey}` ||
+      eventCode === `digit${targetKey}`;
+  }
+
   const ctrlMatches = !!event.ctrlKey === combo.ctrl;
   const altMatches = !!event.altKey === combo.alt;
   const shiftMatches = !!event.shiftKey === combo.shift;
