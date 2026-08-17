@@ -649,76 +649,92 @@ body,
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 9999;
+  z-index: 99999;
 }
 
 .resize-handle {
   position: absolute;
   pointer-events: auto;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+  z-index: 1;
 }
 
 .handle-north {
   top: 0;
-  left: 8px;
-  right: 8px;
-  height: 6px;
+  left: 0;
+  right: 0;
+  height: 12px;
   cursor: ns-resize;
+  cursor: n-resize;
 }
 
 .handle-south {
   bottom: 0;
-  left: 8px;
-  right: 8px;
-  height: 6px;
+  left: 0;
+  right: 0;
+  height: 12px;
   cursor: ns-resize;
+  cursor: s-resize;
 }
 
 .handle-east {
-  top: 8px;
-  bottom: 8px;
+  top: 0;
+  bottom: 0;
   right: 0;
-  width: 6px;
+  width: 12px;
   cursor: ew-resize;
+  cursor: e-resize;
 }
 
 .handle-west {
-  top: 8px;
-  bottom: 8px;
+  top: 0;
+  bottom: 0;
   left: 0;
-  width: 6px;
+  width: 12px;
   cursor: ew-resize;
+  cursor: w-resize;
 }
 
 .handle-north-west {
   top: 0;
   left: 0;
-  width: 10px;
-  height: 10px;
+  width: 24px;
+  height: 24px;
+  z-index: 10;
   cursor: nwse-resize;
+  cursor: nw-resize;
 }
 
 .handle-north-east {
   top: 0;
   right: 0;
-  width: 10px;
-  height: 10px;
+  width: 24px;
+  height: 24px;
+  z-index: 10;
   cursor: nesw-resize;
+  cursor: ne-resize;
 }
 
 .handle-south-west {
   bottom: 0;
   left: 0;
-  width: 10px;
-  height: 10px;
+  width: 24px;
+  height: 24px;
+  z-index: 10;
   cursor: nesw-resize;
+  cursor: sw-resize;
 }
 
 .handle-south-east {
   bottom: 0;
   right: 0;
-  width: 10px;
-  height: 10px;
+  width: 24px;
+  height: 24px;
+  z-index: 10;
   cursor: nwse-resize;
+  cursor: se-resize;
 }
 
 .settings-header-row {
