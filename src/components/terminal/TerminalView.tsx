@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import type { IDisposable, Terminal as XTerm } from "@xterm/xterm";
+import { readText as clipboardReadText } from "@tauri-apps/plugin-clipboard-manager";
 
 import { createNothingXterm } from "../../lib/terminal/xterm";
 import {
@@ -253,7 +254,13 @@ export function TerminalView({
       if (matchesKeyCombo(event, bindings.paste)) {
         event.preventDefault();
         event.stopPropagation();
-        void navigator.clipboard?.readText().then((text) => {
+        const doPaste = async () => {
+          let text = "";
+          if (isTauriRuntime()) {
+            text = await clipboardReadText();
+          } else {
+            text = await navigator.clipboard?.readText();
+          }
           if (!text) return;
           const sessionId = sessionIdRef.current;
           if (sessionId && isTauriRuntime()) {
@@ -261,7 +268,8 @@ export function TerminalView({
           } else if (mockSessionRef.current) {
             mockSessionRef.current.handleData(text);
           }
-        });
+        };
+        void doPaste();
         return false;
       }
 

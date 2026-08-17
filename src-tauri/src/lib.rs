@@ -7,6 +7,7 @@ use terminal::manager::TerminalManager;
 
 pub fn run() {
     let result = tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .manage(TerminalManager::default())
         .invoke_handler(tauri::generate_handler![
             create_terminal,
