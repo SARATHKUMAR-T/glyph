@@ -227,14 +227,23 @@ export function TerminalView({
         return false;
       }
 
-      // Select current active line / prompt text
+      // Select user input on the current line (everything after the shell prompt)
       if (matchesKeyCombo(event, bindings.select_all)) {
         const buffer = terminal.buffer.active;
         const lineY = buffer.cursorY + buffer.viewportY;
         const line = buffer.getLine(lineY);
-        const text = line?.translateToString(true) || "";
+        const text = line?.translateToString(true) ?? "";
+
         if (text.length > 0) {
-          terminal.select(0, lineY, text.length);
+          // Greedy match: find the LAST shell prompt terminator ($ / # / % / >)
+          // followed by a space so we skip to the user-typed input only.
+          const promptEnd = text.match(/^(.*(?:\$\s|#\s|%\s|>\s))/);
+          const inputStart = promptEnd ? promptEnd[1].length : 0;
+          const inputText = text.slice(inputStart);
+
+          if (inputText.length > 0) {
+            terminal.select(inputStart, lineY, inputText.length);
+          }
         }
         return false;
       }
