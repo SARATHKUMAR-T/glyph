@@ -51,3 +51,11 @@ pub fn list_sessions(
 ) -> Result<Vec<TerminalSessionInfo>, TerminalErrorPayload> {
     manager.list_sessions().map_err(Into::into)
 }
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn get_terminal_cwd(
+    manager: State<'_, TerminalManager>,
+    session_id: String,
+) -> Result<Option<String>, TerminalErrorPayload> {
+    manager.get_terminal_cwd(&session_id).map_err(Into::into)
+}

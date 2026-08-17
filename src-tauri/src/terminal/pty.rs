@@ -9,6 +9,7 @@ use super::session::{CreateTerminalRequest, TerminalError};
 pub struct SpawnedPty {
     pub shell: String,
     pub cwd: Option<String>,
+    pub pid: Option<u32>,
     pub master: Box<dyn MasterPty + Send>,
     pub reader: Box<dyn Read + Send>,
     pub writer: Box<dyn Write + Send>,
@@ -59,9 +60,12 @@ pub fn spawn_shell(session_id: &str, request: CreateTerminalRequest) -> Result<S
         .take_writer()
         .map_err(|error| TerminalError::PtyWrite(error.to_string()))?;
 
+    let pid = child.process_id();
+
     Ok(SpawnedPty {
         shell,
         cwd,
+        pid,
         master: pair.master,
         reader,
         writer,

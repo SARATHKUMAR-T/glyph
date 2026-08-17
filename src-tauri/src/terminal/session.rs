@@ -28,6 +28,7 @@ pub struct TerminalSessionInfo {
     pub cols: u16,
     pub rows: u16,
     pub cwd: Option<String>,
+    pub pid: Option<u32>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -107,6 +108,7 @@ pub struct TerminalSession {
     pub id: String,
     pub shell: String,
     pub cwd: Option<String>,
+    pub pid: Option<u32>,
     pub master: Box<dyn MasterPty + Send>,
     pub writer: Arc<Mutex<Box<dyn Write + Send>>>,
     pub killer: Mutex<Box<dyn ChildKiller + Send + Sync>>,
@@ -121,6 +123,7 @@ impl TerminalSession {
             cols: self.size.cols,
             rows: self.size.rows,
             cwd: self.cwd.clone(),
+            pid: self.pid,
         }
     }
 }

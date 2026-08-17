@@ -43,6 +43,11 @@ export async function closeTerminalSession(sessionId: string) {
   });
 }
 
+export async function getTerminalCwd(sessionId: string): Promise<string | null> {
+  ensureTauriRuntime();
+  return invoke<string | null>("get_terminal_cwd", { sessionId }).catch(() => null);
+}
+
 function ensureTauriRuntime() {
   if (!isTauriRuntime()) {
     throw new Error("Tauri runtime is not available.");

@@ -413,6 +413,7 @@ export function TerminalView({
         const info = await createTerminalSession({
           cols: initialCols,
           rows: initialRows,
+          cwd: tab.cwd ?? undefined,
         });
         console.log("[TerminalView] createTerminalSession resolved:", info);
 

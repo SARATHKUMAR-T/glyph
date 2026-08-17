@@ -37,6 +37,7 @@ impl TerminalManager {
             id: session_id.clone(),
             shell: spawned.shell.clone(),
             cwd: spawned.cwd.clone(),
+            pid: spawned.pid,
             master: spawned.master,
             writer: Arc::clone(&writer),
             killer: Mutex::new(killer),
@@ -137,6 +138,28 @@ impl TerminalManager {
             .map_err(|_| TerminalError::StateUnavailable)?;
 
         Ok(sessions.values().map(TerminalSession::info).collect())
+    }
+
+    pub fn get_terminal_cwd(&self, session_id: &str) -> Result<Option<String>, TerminalError> {
+        let sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| TerminalError::StateUnavailable)?;
+        let session = sessions
+            .get(session_id)
+            .ok_or_else(|| TerminalError::SessionNotFound(session_id.to_string()))?;
+
+        // On Linux, read the live CWD of the shell process via /proc/{pid}/cwd
+        #[cfg(target_os = "linux")]
+        if let Some(pid) = session.pid {
+            let proc_cwd = std::path::PathBuf::from(format!("/proc/{}/cwd", pid));
+            if let Ok(resolved) = std::fs::read_link(&proc_cwd) {
+                return Ok(resolved.to_str().map(str::to_string));
+            }
+        }
+
+        // Fallback: spawn-time cwd
+        Ok(session.cwd.clone())
     }
 
     fn spawn_wait_thread(

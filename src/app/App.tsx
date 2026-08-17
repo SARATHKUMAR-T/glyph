@@ -12,6 +12,7 @@ import { useTerminalBlocks } from "../hooks/useTerminalBlocks";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { useKeybindings } from "../hooks/useKeybindings";
 import { isTauriRuntime } from "../lib/terminal/events";
+import { getTerminalCwd } from "../hooks/useTerminalSession";
 import type {
   TerminalSemanticEvent,
   TerminalSessionInfo,
@@ -23,11 +24,12 @@ function createClientId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
 }
 
-function createTab(index: number): TerminalTabModel {
+function createTab(index: number, cwd?: string | null): TerminalTabModel {
   return {
     clientId: createClientId(),
     title: `Terminal ${index}`,
     status: "starting",
+    cwd: cwd ?? undefined,
   };
 }
 
@@ -78,13 +80,21 @@ export function App() {
     [],
   );
 
-  const addTerminal = useCallback(() => {
-    const tab = createTab(nextTabIndex.current);
+  const addTerminal = useCallback(async () => {
+    // Resolve the live CWD of the active session before creating the new tab
+    let inheritedCwd: string | undefined;
+    const currentActiveTab = tabsRef.current.find((t) => t.clientId === activeTabId);
+    if (currentActiveTab?.sessionId && isTauriRuntime()) {
+      inheritedCwd = (await getTerminalCwd(currentActiveTab.sessionId)) ?? currentActiveTab.cwd ?? undefined;
+    } else {
+      inheritedCwd = currentActiveTab?.cwd ?? undefined;
+    }
+    const tab = createTab(nextTabIndex.current, inheritedCwd);
     nextTabIndex.current += 1;
     setTabs((current) => [...current, tab]);
     setActiveTabId(tab.clientId);
     setSearchOpen(false);
-  }, []);
+  }, [activeTabId]);
 
   const openNewWindow = useCallback(() => {
     if (isTauriRuntime()) {
