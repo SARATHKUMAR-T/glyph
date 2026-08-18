@@ -20,10 +20,10 @@ import {
 } from "../../lib/terminal/events";
 import type {
   TerminalBlock as TerminalBlockModel,
+  TerminalPaneModel,
   TerminalSemanticEvent,
   TerminalSessionInfo,
   TerminalStatus,
-  TerminalTabModel,
 } from "../../lib/terminal/types";
 import { matchesKeyCombo, type KeybindingsConfig } from "../../hooks/useKeybindings";
 import type { TerminalSettings } from "../../hooks/useTerminalSettings";
@@ -32,23 +32,31 @@ import { TerminalBlock } from "./TerminalBlock";
 
 type TerminalViewProps = {
   active: boolean;
+  isPaneActive: boolean;
+  isSplit?: boolean;
+  pane: TerminalPaneModel;
+  tabId: string;
   blocks: TerminalBlockModel[];
   keybindings: KeybindingsConfig;
   searchOpen: boolean;
   settings?: TerminalSettings;
-  tab: TerminalTabModel;
+  canClosePane?: boolean;
+  onActivatePane: (paneId: string) => void;
   onCloseSearch: () => void;
   onCloseTerminal?: () => void;
+  onClosePane?: (paneId: string) => void;
+  onSplitVertical?: (paneId: string) => void;
+  onSplitHorizontal?: (paneId: string) => void;
   onNewTerminal?: () => void;
   onNewWindow?: () => void;
   onNextTab?: () => void;
   onPrevTab?: () => void;
   onSearch?: () => void;
-  onSemanticEvent: (clientId: string, event: TerminalSemanticEvent) => void;
-  onSessionReady: (clientId: string, info: TerminalSessionInfo) => void;
-  onSessionResize: (clientId: string, cols: number, rows: number) => void;
-  onSessionStatus: (clientId: string, status: TerminalStatus, error?: string) => void;
-  onTitleChange?: (clientId: string, title: string) => void;
+  onSemanticEvent: (paneId: string, event: TerminalSemanticEvent) => void;
+  onSessionReady: (paneId: string, info: TerminalSessionInfo) => void;
+  onSessionResize: (paneId: string, cols: number, rows: number) => void;
+  onSessionStatus: (paneId: string, status: TerminalStatus, error?: string) => void;
+  onTitleChange?: (paneId: string, title: string) => void;
   onToggleSettings?: () => void;
 };
 
@@ -62,7 +70,12 @@ function formatError(error: unknown): string {
 export function TerminalView({
   active,
   blocks,
+  canClosePane = false,
+  isPaneActive,
+  isSplit = false,
   keybindings,
+  onActivatePane,
+  onClosePane,
   onCloseSearch,
   onCloseTerminal,
   onNewTerminal,
@@ -74,11 +87,14 @@ export function TerminalView({
   onSessionReady,
   onSessionResize,
   onSessionStatus,
+  onSplitHorizontal,
+  onSplitVertical,
   onTitleChange,
   onToggleSettings,
+  pane,
   searchOpen,
   settings,
-  tab,
+  tabId,
 }: TerminalViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -101,6 +117,9 @@ export function TerminalView({
     onNextTab,
     onPrevTab,
     onCloseTerminal,
+    onClosePane,
+    onSplitVertical,
+    onSplitHorizontal,
     onNewTerminal,
     onNewWindow,
     onSearch,
@@ -117,6 +136,9 @@ export function TerminalView({
       onNextTab,
       onPrevTab,
       onCloseTerminal,
+      onClosePane,
+      onSplitVertical,
+      onSplitHorizontal,
       onNewTerminal,
       onNewWindow,
       onSearch,
@@ -144,7 +166,7 @@ export function TerminalView({
       }
       terminal.scrollToBottom();
     } catch (error) {
-      propsRef.current.onSessionStatus(tab.clientId, "error", formatError(error));
+      propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error));
       return;
     }
 
@@ -160,15 +182,15 @@ export function TerminalView({
     }
 
     lastSizeRef.current = { cols, rows };
-    propsRef.current.onSessionResize(tab.clientId, cols, rows);
+    propsRef.current.onSessionResize(pane.paneId, cols, rows);
 
     if (sessionId && isTauriRuntime()) {
       lastResizedSessionIdRef.current = sessionId;
       void resizeTerminalSession(sessionId, { cols, rows }).catch((error: unknown) =>
-        propsRef.current.onSessionStatus(tab.clientId, "error", formatError(error)),
+        propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error)),
       );
     }
-  }, [tab.clientId]);
+  }, [pane.paneId]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -241,8 +263,6 @@ export function TerminalView({
         const text = line?.translateToString(true) ?? "";
 
         if (text.length > 0) {
-          // Greedy match: find the LAST shell prompt terminator ($ / # / % / >)
-          // followed by a space so we skip to the user-typed input only.
           const promptEnd = text.match(/^(.*(?:\$\s|#\s|%\s|>\s))/);
           const inputStart = promptEnd ? promptEnd[1].length : 0;
           const inputText = text.slice(inputStart);
@@ -265,7 +285,7 @@ export function TerminalView({
         return false;
       }
 
-      // Paste text (prevent duplicate xterm textarea paste)
+      // Paste text
       if (matchesKeyCombo(event, bindings.paste)) {
         event.preventDefault();
         event.stopPropagation();
@@ -285,6 +305,30 @@ export function TerminalView({
           }
         };
         void doPaste();
+        return false;
+      }
+
+      // Split Vertical (Right)
+      if (bindings.split_vertical && matchesKeyCombo(event, bindings.split_vertical)) {
+        event.preventDefault();
+        event.stopPropagation();
+        propsRef.current.onSplitVertical?.(pane.paneId);
+        return false;
+      }
+
+      // Split Horizontal (Down)
+      if (bindings.split_horizontal && matchesKeyCombo(event, bindings.split_horizontal)) {
+        event.preventDefault();
+        event.stopPropagation();
+        propsRef.current.onSplitHorizontal?.(pane.paneId);
+        return false;
+      }
+
+      // Close Pane
+      if (bindings.close_pane && matchesKeyCombo(event, bindings.close_pane)) {
+        event.preventDefault();
+        event.stopPropagation();
+        propsRef.current.onClosePane?.(pane.paneId);
         return false;
       }
 
@@ -351,12 +395,11 @@ export function TerminalView({
       const initialCols = Math.max(terminal.cols || 80, 20);
       const initialRows = Math.max(terminal.rows || 24, 5);
       lastSizeRef.current = { cols: initialCols, rows: initialRows };
-      console.log("[TerminalView] bootTerminal start", tab.clientId, { isTauri: isTauriRuntime() });
+      console.log("[TerminalView] bootTerminal start", pane.paneId, { isTauri: isTauriRuntime() });
 
       if (!isTauriRuntime()) {
-        // Run mock interactive shell in browser dev mode
-        propsRef.current.onSessionReady(tab.clientId, {
-          sessionId: "mock-session",
+        propsRef.current.onSessionReady(pane.paneId, {
+          sessionId: `mock-session-${pane.paneId}`,
           shell: "/bin/bash",
           cwd: "/home/aximsoft/projects/glyph",
           cols: initialCols,
@@ -364,35 +407,37 @@ export function TerminalView({
         });
 
         const session = attachMockShell(terminal, (event) => {
-          propsRef.current.onSemanticEvent(tab.clientId, event);
+          propsRef.current.onSemanticEvent(pane.paneId, event);
         });
         mockSessionRef.current = session;
-        terminal.focus();
+        if (isPaneActive) {
+          terminal.focus();
+        }
         return;
       }
 
       try {
-        propsRef.current.onSessionStatus(tab.clientId, "starting");
+        propsRef.current.onSessionStatus(pane.paneId, "starting");
 
-        const pendingOutput: string[] = [];
-        let assignedId: string | null = null;
+        const pendingOutputBySession = new Map<string, string[]>();
+        let assignedId: string | null = pane.sessionId ?? null;
 
-        // IMPORTANT: Register output listeners BEFORE spawning the PTY.
-        // Buffer any output until session ID is assigned so initial prompt is never lost.
         const dataUnlisten = await listenTerminalOutput((evt) => {
           if (assignedId) {
             if (evt.sessionId === assignedId) {
               terminal.write(evt.data);
             }
           } else {
-            pendingOutput.push(evt.data);
+            const list = pendingOutputBySession.get(evt.sessionId) ?? [];
+            list.push(evt.data);
+            pendingOutputBySession.set(evt.sessionId, list);
           }
         });
         unlisteners.push(dataUnlisten);
 
         const eventUnlisten = await listenTerminalSemantic((evt) => {
           if (assignedId && evt.sessionId === assignedId) {
-            propsRef.current.onSemanticEvent(tab.clientId, evt);
+            propsRef.current.onSemanticEvent(pane.paneId, evt);
           }
         });
         unlisteners.push(eventUnlisten);
@@ -401,60 +446,74 @@ export function TerminalView({
           terminal.onData((data) => {
             if (sessionIdRef.current) {
               void writeTerminalData(sessionIdRef.current, data).catch((error: unknown) =>
-                propsRef.current.onSessionStatus(tab.clientId, "error", formatError(error)),
+                propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error)),
               );
             }
           }),
           terminal.onTitleChange((newTitle) => {
             if (newTitle && newTitle.trim()) {
-              propsRef.current.onTitleChange?.(tab.clientId, newTitle.trim());
+              propsRef.current.onTitleChange?.(pane.paneId, newTitle.trim());
             }
           }),
         );
 
-        if (disposed) {
-          return;
-        }
-
-        const info = await createTerminalSession({
-          cols: initialCols,
-          rows: initialRows,
-          cwd: tab.cwd ?? undefined,
-        });
-        console.log("[TerminalView] createTerminalSession resolved:", info);
-
-        if (disposed) {
-          console.warn("[TerminalView] disposed after session created — cleaning up");
-          return;
-        }
-
-        assignedId = info.sessionId;
-        sessionIdRef.current = info.sessionId;
-        fitAndResize();
-
-        // Flush any output received before createTerminalSession IPC resolved
-        if (pendingOutput.length > 0) {
-          for (const chunk of pendingOutput) {
-            terminal.write(chunk);
+        if (pane.sessionId) {
+          assignedId = pane.sessionId;
+          sessionIdRef.current = pane.sessionId;
+          propsRef.current.onSessionStatus(pane.paneId, "running");
+          fitAndResize();
+          if (isPaneActive) {
+            terminal.focus();
           }
-          pendingOutput.length = 0;
+        } else {
+          propsRef.current.onSessionStatus(pane.paneId, "starting");
+
+          const info = await createTerminalSession({
+            cols: initialCols,
+            rows: initialRows,
+            cwd: pane.cwd ?? undefined,
+          });
+          console.log("[TerminalView] createTerminalSession resolved:", info);
+
+          if (disposed) {
+            return;
+          }
+
+          assignedId = info.sessionId;
+          sessionIdRef.current = info.sessionId;
+          lastResizedSessionIdRef.current = info.sessionId;
+          propsRef.current.onSessionReady(pane.paneId, info);
+          fitAndResize();
+          if (isPaneActive) {
+            terminal.focus();
+          }
         }
 
-        propsRef.current.onSessionReady(tab.clientId, info);
-        terminal.focus();
+        if (assignedId) {
+          const sessionPending = pendingOutputBySession.get(assignedId);
+          if (sessionPending && sessionPending.length > 0) {
+            for (const chunk of sessionPending) {
+              terminal.write(chunk);
+            }
+          }
+        }
+        pendingOutputBySession.clear();
 
-        // Re-sync container size shortly after session ready
+
+
         setTimeout(() => {
           if (!disposed) {
             fitAndResize();
-            terminal.focus();
+            if (isPaneActive) {
+              terminal.focus();
+            }
           }
         }, 80);
 
         scheduleResize();
       } catch (error) {
         if (!disposed) {
-          propsRef.current.onSessionStatus(tab.clientId, "error", formatError(error));
+          propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error));
         }
       }
     }
@@ -477,10 +536,10 @@ export function TerminalView({
       searchAddonRef.current = null;
       sessionIdRef.current = null;
     };
-  }, [fitAndResize, tab.clientId]);
+  }, [fitAndResize, pane.paneId]);
 
   useEffect(() => {
-    if (active) {
+    if (active && isPaneActive) {
       const timer = setTimeout(() => {
         fitAndResize();
         terminalRef.current?.scrollToBottom();
@@ -488,7 +547,7 @@ export function TerminalView({
       }, 25);
       return () => clearTimeout(timer);
     }
-  }, [active, fitAndResize]);
+  }, [active, isPaneActive, fitAndResize]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -503,7 +562,7 @@ export function TerminalView({
   }, [fitAndResize, settings?.cursorBlink, settings?.cursorStyle, settings?.fontSize]);
 
   useEffect(() => {
-    if (searchOpen) {
+    if (searchOpen && isPaneActive) {
       const timer = setTimeout(() => {
         searchInputRef.current?.focus();
         searchInputRef.current?.select();
@@ -512,11 +571,11 @@ export function TerminalView({
     } else {
       setQuery("");
       searchAddonRef.current?.clearDecorations();
-      if (active) {
+      if (active && isPaneActive) {
         terminalRef.current?.focus();
       }
     }
-  }, [active, searchOpen]);
+  }, [active, isPaneActive, searchOpen]);
 
   const handleSearchNext = () => {
     if (query) {
@@ -540,14 +599,73 @@ export function TerminalView({
   };
 
   const focusTerminal = () => {
+    onActivatePane(pane.paneId);
     terminalRef.current?.focus();
   };
 
+  const showPaneGlow = isSplit && isPaneActive;
+  const activeClass = active && showPaneGlow ? "terminal-view is-active is-active-pane" : active ? "terminal-view is-active" : "terminal-view";
+
   return (
     <div
-      className={active ? "terminal-view is-active" : "terminal-view"}
+      className={activeClass}
       onClick={focusTerminal}
+      onFocus={focusTerminal}
+      tabIndex={-1}
     >
+      <div className="pane-header-bar">
+        <div className="pane-header-left">
+          <span className={`pane-status-dot pane-status-${pane.status}`} aria-hidden="true" />
+        </div>
+        <div className="pane-header-controls">
+          <button
+            type="button"
+            className="pane-control-btn"
+            title="Split Right (Ctrl+Shift+D)"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSplitVertical?.(pane.paneId);
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2.5" />
+              <line x1="12" y1="3" x2="12" y2="21" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            className="pane-control-btn"
+            title="Split Down (Ctrl+Shift+O)"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSplitHorizontal?.(pane.paneId);
+            }}
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2.5" />
+              <line x1="3" y1="12" x2="21" y2="12" />
+            </svg>
+          </button>
+          {canClosePane && (
+            <button
+              type="button"
+              className="pane-control-btn pane-control-close"
+              title="Close Pane (Ctrl+Shift+W)"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClosePane?.(pane.paneId);
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+
+
       <nav className="block-rail" aria-label="Terminal blocks">
         {blocks.length === 0 ? (
           <div className="block-empty">no executed blocks</div>
@@ -557,7 +675,7 @@ export function TerminalView({
       </nav>
 
       <section className="terminal-output" aria-label="Terminal stream">
-        {searchOpen && (
+        {searchOpen && isPaneActive && (
           <div
             className="terminal-search"
             onClick={(e) => e.stopPropagation()}

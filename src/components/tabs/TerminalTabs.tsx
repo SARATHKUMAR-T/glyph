@@ -1,4 +1,5 @@
 import type { TerminalTabModel } from "../../lib/terminal/types";
+import { getAllPanesInTree } from "../../lib/terminal/splitTree";
 import { TerminalTab } from "./TerminalTab";
 
 type TerminalTabsProps = {
@@ -22,16 +23,25 @@ export function TerminalTabs({
         <span className="tabs-header-title">TERMINALS ({tabs.length})</span>
       </div>
       <div className="tabs-container">
-        {tabs.map((tab) => (
-          <TerminalTab
-            key={tab.clientId}
-            active={tab.clientId === activeTabId}
-            canClose={tabs.length > 1}
-            tab={tab}
-            onActivate={onActivate}
-            onClose={onClose}
-          />
-        ))}
+        {tabs.map((tab) => {
+          const panes = getAllPanesInTree(tab.rootNode);
+          const activePane = panes.find((p) => p.paneId === tab.activePaneId) ?? panes[0];
+          const status = activePane?.status ?? "starting";
+
+          return (
+            <TerminalTab
+              key={tab.clientId}
+              active={tab.clientId === activeTabId}
+              canClose={tabs.length > 1}
+              tab={tab}
+              status={status}
+              paneCount={panes.length}
+              onActivate={onActivate}
+              onClose={onClose}
+            />
+          );
+        })}
+
         <button
           aria-label="New Terminal Tab (Ctrl+Shift+T)"
           className="tabs-new"

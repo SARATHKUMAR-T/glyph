@@ -6,6 +6,8 @@ type ShortcutHandlers = {
   onNewTerminal: () => void;
   onNewWindow: () => void;
   onCloseTerminal: () => void;
+  onSplitVertical?: () => void;
+  onSplitHorizontal?: () => void;
   onNextTab?: () => void;
   onPrevTab?: () => void;
   onSearch: () => void;
@@ -20,11 +22,13 @@ export function useKeyboardShortcuts({
   onNextTab,
   onPrevTab,
   onSearch,
+  onSplitHorizontal,
+  onSplitVertical,
   onToggleSettings,
 }: ShortcutHandlers) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Don't intercept when user is typing inside text input fields (e.g. search box or settings inputs)
+      // Don't intercept when user is typing inside text input fields
       const targetTag = (event.target as HTMLElement)?.tagName?.toLowerCase();
       if (targetTag === "input" || targetTag === "textarea" || targetTag === "select") {
         return;
@@ -48,6 +52,20 @@ export function useKeyboardShortcuts({
         event.preventDefault();
         event.stopPropagation();
         onCloseTerminal();
+        return;
+      }
+
+      if (keybindings.split_vertical && matchesKeyCombo(event, keybindings.split_vertical)) {
+        event.preventDefault();
+        event.stopPropagation();
+        onSplitVertical?.();
+        return;
+      }
+
+      if (keybindings.split_horizontal && matchesKeyCombo(event, keybindings.split_horizontal)) {
+        event.preventDefault();
+        event.stopPropagation();
+        onSplitHorizontal?.();
         return;
       }
 
@@ -90,6 +108,8 @@ export function useKeyboardShortcuts({
     onNextTab,
     onPrevTab,
     onSearch,
+    onSplitHorizontal,
+    onSplitVertical,
     onToggleSettings,
   ]);
 }

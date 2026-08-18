@@ -8,9 +8,8 @@ export type TerminalSessionInfo = {
   cwd?: string | null;
 };
 
-export type TerminalTabModel = {
-  clientId: string;
-  title: string;
+export type TerminalPaneModel = {
+  paneId: string;
   sessionId?: string;
   shell?: string;
   cwd?: string | null;
@@ -18,6 +17,29 @@ export type TerminalTabModel = {
   rows?: number;
   status: TerminalStatus;
   error?: string;
+  title?: string;
+};
+
+export type SplitDirection = "vertical" | "horizontal";
+
+export type SplitNode =
+  | {
+      type: "pane";
+      pane: TerminalPaneModel;
+    }
+  | {
+      type: "split";
+      id: string;
+      direction: SplitDirection;
+      ratio: number;
+      children: [SplitNode, SplitNode];
+    };
+
+export type TerminalTabModel = {
+  clientId: string;
+  title: string;
+  rootNode: SplitNode;
+  activePaneId: string;
 };
 
 export type TerminalOutputEvent = {

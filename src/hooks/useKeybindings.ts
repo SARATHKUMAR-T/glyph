@@ -6,6 +6,9 @@ export type ShortcutAction =
   | "close_tab"
   | "next_tab"
   | "prev_tab"
+  | "split_vertical"
+  | "split_horizontal"
+  | "close_pane"
   | "copy"
   | "paste"
   | "search"
@@ -13,7 +16,7 @@ export type ShortcutAction =
   | "toggle_settings";
 
 export type KeyCombo = {
-  key: string; // e.g. "t", "n", "w", "Tab", "c", "v", "f", "a", ","
+  key: string;
   ctrl: boolean;
   alt: boolean;
   shift: boolean;
@@ -28,6 +31,9 @@ export const DEFAULT_KEYBINDINGS: KeybindingsConfig = {
   close_tab: { key: "w", ctrl: true, alt: false, shift: true, meta: false },
   next_tab: { key: "Tab", ctrl: true, alt: false, shift: false, meta: false },
   prev_tab: { key: "Tab", ctrl: true, alt: false, shift: true, meta: false },
+  split_vertical: { key: "d", ctrl: true, alt: false, shift: true, meta: false },
+  split_horizontal: { key: "o", ctrl: true, alt: false, shift: true, meta: false },
+  close_pane: { key: "w", ctrl: true, alt: false, shift: true, meta: false },
   copy: { key: "c", ctrl: true, alt: false, shift: true, meta: false },
   paste: { key: "v", ctrl: true, alt: false, shift: true, meta: false },
   search: { key: "f", ctrl: true, alt: false, shift: true, meta: false },
@@ -41,6 +47,9 @@ export const ACTION_LABELS: Record<ShortcutAction, { label: string; description:
   close_tab: { label: "Close Terminal Tab", description: "Close the active terminal tab" },
   next_tab: { label: "Next Tab", description: "Switch to next active terminal tab" },
   prev_tab: { label: "Previous Tab", description: "Switch to previous terminal tab" },
+  split_vertical: { label: "Split Terminal Right", description: "Split current pane side-by-side (Vertical)" },
+  split_horizontal: { label: "Split Terminal Down", description: "Split current pane stacked (Horizontal)" },
+  close_pane: { label: "Close Active Pane", description: "Close currently focused terminal pane" },
   copy: { label: "Copy", description: "Copy selected text to clipboard" },
   paste: { label: "Paste", description: "Paste text into active shell" },
   search: { label: "Find / Search Buffer", description: "Search terminal scrollback history" },
@@ -48,7 +57,7 @@ export const ACTION_LABELS: Record<ShortcutAction, { label: string; description:
   toggle_settings: { label: "Toggle Settings", description: "Open or close Settings panel" },
 };
 
-const STORAGE_KEY = "glyph_keybindings_v4";
+const STORAGE_KEY = "glyph_keybindings_v5";
 
 export function formatKeyCombo(combo: KeyCombo): string {
   const parts: string[] = [];
@@ -67,6 +76,7 @@ export function formatKeyCombo(combo: KeyCombo): string {
 }
 
 export function matchesKeyCombo(event: KeyboardEvent, combo: KeyCombo): boolean {
+  if (!combo) return false;
   const eventKey = event.key.toLowerCase();
   const targetKey = combo.key.toLowerCase();
   const eventCode = event.code.toLowerCase();

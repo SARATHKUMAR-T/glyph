@@ -1,7 +1,7 @@
-import type { TerminalTabModel } from "../../lib/terminal/types";
+import type { TerminalPaneModel } from "../../lib/terminal/types";
 
 type TerminalStatusProps = {
-  tab: TerminalTabModel;
+  pane: TerminalPaneModel;
 };
 
 function basename(path?: string | null) {
@@ -17,19 +17,19 @@ function formatCwd(path?: string | null) {
   return path.replace(/\/home\/[^/]+/, "~");
 }
 
-export function TerminalStatus({ tab }: TerminalStatusProps) {
-  const size = tab.cols && tab.rows ? `${tab.cols}×${tab.rows}` : "measuring";
-  const cwdDisplay = formatCwd(tab.cwd);
+export function TerminalStatus({ pane }: TerminalStatusProps) {
+  const size = pane.cols && pane.rows ? `${pane.cols}×${pane.rows}` : "measuring";
+  const cwdDisplay = formatCwd(pane.cwd);
 
   return (
     <div className="terminal-status">
-      <span className={`terminal-status-dot status-${tab.status}`} aria-hidden="true" />
-      <span>{tab.status}</span>
-      <span>{basename(tab.shell)}</span>
-      <span>{tab.title}</span>
-      <span className="terminal-status-pwd" title={tab.cwd || "~"}>{cwdDisplay}</span>
+      <span className={`terminal-status-dot status-${pane.status}`} aria-hidden="true" />
+      <span>{pane.status}</span>
+      <span>{basename(pane.shell)}</span>
+      <span>{pane.title}</span>
+      <span className="terminal-status-pwd" title={pane.cwd || "~"}>{cwdDisplay}</span>
       <span>{size}</span>
-      {tab.error ? <span className="terminal-status-error">{tab.error}</span> : null}
+      {pane.error ? <span className="terminal-status-error">{pane.error}</span> : null}
     </div>
   );
 }

@@ -1,6 +1,7 @@
 .terminal-view {
-  position: absolute;
-  inset: 0;
+  position: relative;
+  width: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -8,12 +9,177 @@
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
+  border: 1px solid transparent;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  box-sizing: border-box;
 }
 
 .terminal-view.is-active {
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
+}
+
+.terminal-view.is-active-pane {
+  border-color: rgba(255, 48, 48, 0.45);
+  box-shadow: inset 0 0 10px rgba(255, 48, 48, 0.1);
+}
+
+.pane-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 26px;
+  padding: 0 8px 0 10px;
+  background: rgba(10, 10, 14, 0.7);
+  border-bottom: 1px solid var(--nothing-line);
+  user-select: none;
+  flex-shrink: 0;
+  backdrop-filter: blur(8px);
+}
+
+.pane-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pane-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nothing-gray-500);
+}
+
+.pane-status-running {
+  background: var(--nothing-red-bright);
+  box-shadow: 0 0 6px rgba(255, 48, 48, 0.8);
+}
+
+.pane-status-error {
+  background: var(--nothing-red);
+}
+
+.pane-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pane-control-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 20px;
+  border: 1px solid var(--nothing-line);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--nothing-gray-300);
+  cursor: pointer;
+  padding: 0;
+  transition: all 120ms ease;
+}
+
+.pane-control-btn svg {
+  display: block;
+}
+
+.pane-control-btn:hover {
+  border-color: var(--nothing-red-bright);
+  background: rgba(255, 48, 48, 0.18);
+  color: var(--nothing-white);
+  box-shadow: 0 0 8px rgba(255, 48, 48, 0.3);
+}
+
+.pane-control-close:hover {
+  border-color: var(--nothing-red-bright);
+  background: rgba(255, 48, 48, 0.3);
+  color: var(--nothing-white);
+  box-shadow: 0 0 10px rgba(255, 48, 48, 0.5);
+}
+
+.pane-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.pane-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--nothing-gray-300);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.12s ease;
+}
+
+.pane-btn:hover {
+  border-color: var(--nothing-line-strong);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--nothing-white);
+}
+
+.pane-btn-close:hover {
+  border-color: rgba(255, 48, 48, 0.5);
+  background: rgba(255, 48, 48, 0.25);
+  color: var(--nothing-white);
+}
+
+/* Split Tree Containers & Resizers */
+.split-container {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.split-pane-wrapper {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.split-resizer {
+  position: relative;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.06);
+  transition: background 0.15s ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.split-resizer-vertical {
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.split-resizer-horizontal {
+  height: 6px;
+  width: 100%;
+  cursor: row-resize;
+}
+
+.split-resizer:hover,
+.split-resizer.is-dragging {
+  background: var(--nothing-red-bright);
+  box-shadow: 0 0 10px rgba(255, 48, 48, 0.8);
+}
+
+.split-resizer-line {
+  position: absolute;
+  inset: 0;
 }
 
 .block-rail {
@@ -236,4 +402,3 @@
   cursor: pointer !important;
   text-decoration: underline !important;
 }
-
