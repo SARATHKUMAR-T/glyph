@@ -108,6 +108,17 @@ export function TerminalView({
   const keybindingsRef = useRef<KeybindingsConfig>(keybindings);
   const [query, setQuery] = useState("");
 
+  const scrollPosRef = useRef<{ viewportY: number; isAtBottom: boolean }>({
+    viewportY: 0,
+    isAtBottom: true,
+  });
+  const activeRef = useRef(active);
+  const isRestoringScrollRef = useRef(false);
+
+  useEffect(() => {
+    activeRef.current = active;
+  }, [active]);
+
   const propsRef = useRef({
     onSessionReady,
     onSessionStatus,
@@ -150,6 +161,21 @@ export function TerminalView({
     keybindingsRef.current = keybindings;
   }, [keybindings]);
 
+  const restoreScrollPosition = useCallback(() => {
+    const terminal = terminalRef.current;
+    if (!terminal) return;
+
+    isRestoringScrollRef.current = true;
+    if (scrollPosRef.current.isAtBottom) {
+      terminal.scrollToBottom();
+    } else {
+      terminal.scrollToLine(scrollPosRef.current.viewportY);
+    }
+    setTimeout(() => {
+      isRestoringScrollRef.current = false;
+    }, 100);
+  }, []);
+
   const fitAndResize = useCallback(() => {
     const terminal = terminalRef.current;
     const fitAddon = fitAddonRef.current;
@@ -164,7 +190,7 @@ export function TerminalView({
       } else {
         fitAddon.fit();
       }
-      terminal.scrollToBottom();
+      restoreScrollPosition();
     } catch (error) {
       propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error));
       return;
@@ -190,7 +216,7 @@ export function TerminalView({
         propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error)),
       );
     }
-  }, [pane.paneId]);
+  }, [pane.paneId, restoreScrollPosition]);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -443,6 +469,18 @@ export function TerminalView({
         unlisteners.push(eventUnlisten);
 
         disposables.push(
+          terminal.onScroll((newViewportY) => {
+            if (!activeRef.current || isRestoringScrollRef.current) {
+              return;
+            }
+            const buffer = terminal.buffer.active;
+            const isAtBottom =
+              buffer.type === "alternate" || newViewportY >= buffer.baseY - 1;
+            scrollPosRef.current = {
+              viewportY: newViewportY,
+              isAtBottom,
+            };
+          }),
           terminal.onData((data) => {
             if (sessionIdRef.current) {
               void writeTerminalData(sessionIdRef.current, data).catch((error: unknown) =>
@@ -539,10 +577,29 @@ export function TerminalView({
   }, [fitAndResize, pane.paneId]);
 
   useEffect(() => {
+    if (!active && terminalRef.current) {
+      const terminal = terminalRef.current;
+      const buffer = terminal.buffer.active;
+      const isAtBottom =
+        buffer.type === "alternate" || buffer.viewportY >= buffer.baseY - 1;
+      scrollPosRef.current = {
+        viewportY: buffer.viewportY,
+        isAtBottom,
+      };
+    } else if (active) {
+      isRestoringScrollRef.current = true;
+      restoreScrollPosition();
+      const timer = setTimeout(() => {
+        isRestoringScrollRef.current = false;
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [active, restoreScrollPosition]);
+
+  useEffect(() => {
     if (active && isPaneActive) {
       const timer = setTimeout(() => {
         fitAndResize();
-        terminalRef.current?.scrollToBottom();
         terminalRef.current?.focus();
       }, 25);
       return () => clearTimeout(timer);
