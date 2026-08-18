@@ -48,8 +48,19 @@ export async function getTerminalCwd(sessionId: string): Promise<string | null> 
   return invoke<string | null>("get_terminal_cwd", { sessionId }).catch(() => null);
 }
 
+export async function openExternalUrl(url: string): Promise<void> {
+  if (isTauriRuntime()) {
+    await invoke<void>("open_url", { url }).catch((err: unknown) => {
+      console.error("[open_url] IPC error:", err, "url:", url);
+    });
+  } else {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
 function ensureTauriRuntime() {
   if (!isTauriRuntime()) {
     throw new Error("Tauri runtime is not available.");
   }
 }
+

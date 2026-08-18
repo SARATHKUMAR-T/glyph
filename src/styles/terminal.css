@@ -229,3 +229,11 @@
     padding: 10px;
   }
 }
+
+/* Web links addon hover style */
+.xterm-hover-pattern,
+.xterm-hover-pattern span {
+  cursor: pointer !important;
+  text-decoration: underline !important;
+}
+

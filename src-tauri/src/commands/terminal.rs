@@ -59,3 +59,9 @@ pub fn get_terminal_cwd(
 ) -> Result<Option<String>, TerminalErrorPayload> {
     manager.get_terminal_cwd(&session_id).map_err(Into::into)
 }
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn open_url(url: String) -> Result<(), String> {
+    open::that(&url).map_err(|e| e.to_string())
+}
+

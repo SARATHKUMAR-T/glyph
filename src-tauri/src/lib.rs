@@ -2,7 +2,10 @@ mod commands;
 mod events;
 mod terminal;
 
-use commands::terminal::{close_terminal, create_terminal, get_terminal_cwd, list_sessions, resize_terminal, write_terminal};
+use commands::terminal::{
+    close_terminal, create_terminal, get_terminal_cwd, list_sessions, open_url, resize_terminal,
+    write_terminal,
+};
 use terminal::manager::TerminalManager;
 
 pub fn run() {
@@ -15,7 +18,8 @@ pub fn run() {
             resize_terminal,
             close_terminal,
             list_sessions,
-            get_terminal_cwd
+            get_terminal_cwd,
+            open_url
         ])
         .setup(|_app| {
             #[cfg(debug_assertions)]

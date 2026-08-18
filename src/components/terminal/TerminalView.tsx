@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
+import { WebLinksAddon } from "@xterm/addon-web-links";
 import type { IDisposable, Terminal as XTerm } from "@xterm/xterm";
 import { readText as clipboardReadText } from "@tauri-apps/plugin-clipboard-manager";
 
 import { createNothingXterm } from "../../lib/terminal/xterm";
 import {
   createTerminalSession,
+  openExternalUrl,
   resizeTerminalSession,
   writeTerminalData,
 } from "../../hooks/useTerminalSession";
@@ -181,6 +183,9 @@ export function TerminalView({
     });
     const fitAddon = new FitAddon();
     const searchAddon = new SearchAddon();
+    const webLinksAddon = new WebLinksAddon((_event, uri) => {
+      void openExternalUrl(uri);
+    });
     const disposables: IDisposable[] = [];
     const unlisteners: Array<() => void> = [];
     let resizeFrame = 0;
@@ -191,6 +196,7 @@ export function TerminalView({
     searchAddonRef.current = searchAddon;
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(searchAddon);
+    terminal.loadAddon(webLinksAddon);
     terminal.open(host);
 
     const scheduleResize = () => {
