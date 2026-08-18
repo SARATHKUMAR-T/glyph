@@ -13,6 +13,7 @@ export type TerminalSettings = {
   cursorStyle: CursorStyleOption;
   cursorBlink: boolean;
   fontSize: number;
+  showPerformanceBar: boolean;
 };
 
 const DEFAULT_SETTINGS: TerminalSettings = {
@@ -24,6 +25,7 @@ const DEFAULT_SETTINGS: TerminalSettings = {
   cursorStyle: "bar",
   cursorBlink: true,
   fontSize: 14,
+  showPerformanceBar: true,
 };
 
 const STORAGE_KEY = "glyph_terminal_settings_v7";

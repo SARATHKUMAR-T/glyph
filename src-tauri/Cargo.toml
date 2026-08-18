@@ -23,4 +23,5 @@ thiserror = "2"
 tracing = "0.1"
 uuid = { version = "1", features = ["v4", "serde"] }
 open = "5"
+sysinfo = "0.36.1"
 

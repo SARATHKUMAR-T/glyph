@@ -141,6 +141,20 @@ export function Settings({
       </div>
 
       <div className="settings-section">
+        <h2>Performance Monitor</h2>
+        <div className="settings-row">
+          <span>Show System Performance</span>
+          <button
+            type="button"
+            className={settings.showPerformanceBar ? "settings-toggle is-active" : "settings-toggle"}
+            onClick={() => onUpdateSettings({ showPerformanceBar: !settings.showPerformanceBar })}
+          >
+            {settings.showPerformanceBar ? "ON" : "OFF"}
+          </button>
+        </div>
+      </div>
+
+      <div className="settings-section">
         <h2>Matrix Dot Background</h2>
         <div className="settings-row">
           <span>Pattern</span>

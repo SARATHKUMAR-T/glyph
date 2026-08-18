@@ -247,6 +247,7 @@ export function App() {
         onNewWindow={openNewWindow}
         onSearch={() => setSearchOpen(true)}
         onToggleSettings={() => setSettingsOpen((open) => !open)}
+        showPerformanceBar={settings.showPerformanceBar}
       />
       <main className="workspace">
         <TerminalTabs

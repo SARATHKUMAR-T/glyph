@@ -2,6 +2,7 @@ mod commands;
 mod events;
 mod terminal;
 
+use commands::system::{get_system_perf_stats, SystemMonitorState};
 use commands::terminal::{
     close_terminal, create_terminal, get_terminal_cwd, list_sessions, open_url, resize_terminal,
     write_terminal,
@@ -12,6 +13,7 @@ pub fn run() {
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(TerminalManager::default())
+        .manage(SystemMonitorState::default())
         .invoke_handler(tauri::generate_handler![
             create_terminal,
             write_terminal,
@@ -19,7 +21,8 @@ pub fn run() {
             close_terminal,
             list_sessions,
             get_terminal_cwd,
-            open_url
+            open_url,
+            get_system_perf_stats
         ])
         .setup(|_app| {
             #[cfg(debug_assertions)]

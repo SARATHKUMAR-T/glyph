@@ -1,21 +1,35 @@
 import { APP_NAME } from "../../lib/constants";
 import { WindowControls } from "./WindowControls";
+import { PerformanceBar } from "../ui/PerformanceBar";
 
 type TitleBarProps = {
   onNewTerminal?: () => void;
   onNewWindow?: () => void;
   onSearch: () => void;
   onToggleSettings: () => void;
+  showPerformanceBar?: boolean;
 };
 
-export function TitleBar({ onNewTerminal, onNewWindow, onSearch, onToggleSettings }: TitleBarProps) {
+export function TitleBar({
+  onNewTerminal,
+  onNewWindow,
+  onSearch,
+  onToggleSettings,
+  showPerformanceBar = true,
+}: TitleBarProps) {
   return (
-    <header className="title-bar" data-tauri-drag-region>
-      <div className="brand-lockup" data-tauri-drag-region>
-        <span className="brand-pulse" aria-hidden="true" />
-        <span className="brand-text">{APP_NAME}</span>
-      </div>
-      <div className="title-actions">
+    <header className="title-bar-container" data-tauri-drag-region>
+      <div className="title-bar" data-tauri-drag-region>
+        <div className="title-bar-left" data-tauri-drag-region>
+          <div className="brand-lockup" data-tauri-drag-region>
+            <span className="brand-pulse" aria-hidden="true" />
+            <span className="brand-text">{APP_NAME}</span>
+          </div>
+          <div className="perf-bar-desktop" data-tauri-drag-region>
+            <PerformanceBar enabled={showPerformanceBar} />
+          </div>
+        </div>
+        <div className="title-actions">
         {onNewWindow && (
           <button
             aria-label="New Terminal Window (Ctrl+Shift+N)"
@@ -55,7 +69,13 @@ export function TitleBar({ onNewTerminal, onNewWindow, onSearch, onToggleSetting
           </svg>
         </button>
         <WindowControls />
+        </div>
       </div>
+      {showPerformanceBar && (
+        <div className="perf-bar-mobile" data-tauri-drag-region>
+          <PerformanceBar enabled={showPerformanceBar} />
+        </div>
+      )}
     </header>
   );
 }
