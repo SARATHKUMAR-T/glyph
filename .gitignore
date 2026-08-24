@@ -52,9 +52,3 @@ Thumbs.db
 *.temp
 *.swp
 *.swo
-
-# =========================================
-# Tauri build artifacts
-# =========================================
-
-src-tauri/target/
