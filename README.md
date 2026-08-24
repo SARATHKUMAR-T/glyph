@@ -1,4 +1,4 @@
-# Nothing Terminal
+# Glyph Terminal
 
 A minimal Linux terminal emulator inspired by Nothing OS and block-oriented terminals.
 
