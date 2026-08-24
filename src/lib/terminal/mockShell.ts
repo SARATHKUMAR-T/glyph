@@ -1,5 +1,6 @@
 import type { Terminal } from "@xterm/xterm";
 import type { TerminalSemanticEvent } from "./types";
+import { formatErrorMessage, getRandomQuote } from "../supabase";
 
 export type MockShellSession = {
   handleData: (data: string) => void;
@@ -169,7 +170,7 @@ function executeMockCommand(cmd: string, terminal: Terminal, onComplete: () => v
       break;
     case "help":
       terminal.writeln("\x1b[1;37mGlyph Simulated Commands:\x1b[0m");
-      terminal.writeln("  ls, pwd, whoami, uname, date, echo, history, clear, help");
+      terminal.writeln("  ls, pwd, whoami, uname, date, echo, history, quote, clear, help");
       terminal.writeln("  Press \x1b[38;2;255;48;48mUp / Down Arrow\x1b[0m for command history.");
       onComplete();
       break;
@@ -197,6 +198,35 @@ function executeMockCommand(cmd: string, terminal: Terminal, onComplete: () => v
       terminal.writeln("  1  git status\r\n  2  npm run build\r\n  3  cargo check\r\n  4  ls -la");
       onComplete();
       break;
+    case "quote": {
+      let frameIdx = 0;
+      terminal.write("\r\n");
+      const renderSpinner = () => {
+        const frame = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"][frameIdx % 10];
+        frameIdx++;
+        terminal.write(`\r\x1b[2K  \x1b[38;2;255;48;48m${frame}\x1b[0m \x1b[38;2;180;180;180mFetching quote...\x1b[0m`);
+      };
+
+      renderSpinner();
+      const interval = setInterval(renderSpinner, 80);
+
+      void getRandomQuote()
+        .then(({ quote, author }) => {
+          clearInterval(interval);
+          terminal.write("\r\x1b[2K");
+          terminal.writeln(`  \x1b[3m\x1b[38;2;220;220;220m"${quote}"\x1b[0m`);
+          terminal.writeln(`  \x1b[38;2;160;160;160m\x1b[2m— ${author}\x1b[0m`);
+          terminal.writeln("");
+        })
+        .catch((err: unknown) => {
+          clearInterval(interval);
+          terminal.write("\r\x1b[2K");
+          const msg = formatErrorMessage(err);
+          terminal.writeln(`\x1b[31m  Error fetching quote: ${msg}\x1b[0m`);
+        })
+        .finally(() => onComplete());
+      break;
+    }
     default:
       if (main?.startsWith("echo")) {
         terminal.writeln(parts.slice(1).join(" "));

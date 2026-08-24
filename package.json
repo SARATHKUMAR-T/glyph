@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
     "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
     "@xterm/addon-fit": "0.11.0",

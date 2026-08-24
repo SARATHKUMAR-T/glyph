@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 import { Settings } from "../components/settings/Settings";
+import { TerminalPanePortals } from "../components/terminal/TerminalPanePortals";
 import { TerminalSplitView } from "../components/terminal/TerminalSplitView";
 import { TerminalTabs } from "../components/tabs/TerminalTabs";
 import { TitleBar } from "../components/window/TitleBar";
@@ -395,11 +396,15 @@ export function App() {
                 }}
               >
                 <TerminalSplitView
+                  node={tab.rootNode}
+                  onResizeSplit={(splitId, ratio) => handleResizeSplit(tab.clientId, splitId, ratio)}
+                />
+                <TerminalPanePortals
                   activePaneId={tab.activePaneId}
                   activeTab={isTabActive}
                   blocksByPane={blocksByTab}
                   keybindings={keybindings}
-                  node={tab.rootNode}
+                  panes={panes}
                   paneCount={panes.length}
                   searchOpen={searchOpen && isTabActive}
                   settings={settings}
@@ -412,7 +417,6 @@ export function App() {
                   onNewWindow={openNewWindow}
                   onNextTab={handleNextTab}
                   onPrevTab={handlePrevTab}
-                  onResizeSplit={(splitId, ratio) => handleResizeSplit(tab.clientId, splitId, ratio)}
                   onSearch={() => setSearchOpen(true)}
                   onSemanticEvent={handleSemanticEvent}
                   onSessionReady={handleSessionReady}

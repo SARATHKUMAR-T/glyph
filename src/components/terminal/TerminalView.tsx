@@ -13,6 +13,7 @@ import {
   writeTerminalData,
 } from "../../hooks/useTerminalSession";
 import { attachMockShell } from "../../lib/terminal/mockShell";
+import { tryRunBuiltinCommand } from "../../lib/terminal/builtinCommands";
 import {
   isTauriRuntime,
   listenTerminalOutput,
@@ -238,6 +239,7 @@ export function TerminalView({
     const unlisteners: Array<() => void> = [];
     let resizeFrame = 0;
     let disposed = false;
+    let inputLineBuffer = "";
 
     terminalRef.current = terminal;
     fitAddonRef.current = fitAddon;
@@ -482,11 +484,55 @@ export function TerminalView({
             };
           }),
           terminal.onData((data) => {
-            if (sessionIdRef.current) {
-              void writeTerminalData(sessionIdRef.current, data).catch((error: unknown) =>
-                propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error)),
-              );
+            if (!sessionIdRef.current) return;
+            const sid = sessionIdRef.current;
+
+            // Track input line buffer to detect built-in commands
+            if (data === "\r") {
+              // Enter pressed — check for built-in command
+              const cmd = inputLineBuffer.trim();
+              inputLineBuffer = "";
+
+              if (cmd.length > 0) {
+                void tryRunBuiltinCommand(cmd, terminal, (d) => {
+                  void writeTerminalData(sid, d).catch((error: unknown) =>
+                    propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error)),
+                  );
+                }).then((result) => {
+                  if (!result.handled) {
+                    // Not a built-in — send the original Enter to the PTY
+                    void writeTerminalData(sid, "\r").catch((error: unknown) =>
+                      propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error)),
+                    );
+                  }
+                });
+              } else {
+                // Empty input, just forward Enter
+                void writeTerminalData(sid, data).catch((error: unknown) =>
+                  propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error)),
+                );
+              }
+              return;
             }
+
+            // Track printable characters for the input buffer
+            if (data === "\x7f") {
+              // Backspace
+              inputLineBuffer = inputLineBuffer.slice(0, -1);
+            } else if (data === "\x03") {
+              // Ctrl+C — reset buffer
+              inputLineBuffer = "";
+            } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
+              inputLineBuffer += data;
+            } else if (data.length > 1 && !data.startsWith("\x1b")) {
+              // Pasted text
+              inputLineBuffer += data;
+            }
+
+            // Forward everything else to PTY normally
+            void writeTerminalData(sid, data).catch((error: unknown) =>
+              propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error)),
+            );
           }),
           terminal.onTitleChange((newTitle) => {
             if (newTitle && newTitle.trim()) {
