@@ -4,6 +4,8 @@
 
 > **Your terminal. Your workflow.**
 
+[![CI](https://github.com/SARATHKUMAR-T/glyph/actions/workflows/ci.yml/badge.svg)](https://github.com/SARATHKUMAR-T/glyph/actions/workflows/ci.yml)
+
 Glyph is a modern terminal emulator built for developers who want more
 control over their terminal experience --- from customizable UI and
 cursors to remappable shortcuts and split panes.
