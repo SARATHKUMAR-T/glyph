@@ -1,0 +1,8 @@
+name: Feature Request description: Suggest an idea or improvement for Glyph title: "[Feature]: " labels: - enhancement body: - type: markdown attributes: value: | Have an idea that could make Glyph better? Tell us 
+        what you have in mind.
+  - type: textarea id: problem attributes: label: What problem would this solve? description: Describe the problem or limitation you're experiencing. placeholder: | I often need to... Currently there is no way to... 
+    validations:
+      required: true - type: textarea id: solution attributes: label: Describe your proposed solution description: Explain how you think Glyph could solve the problem. placeholder: Describe your idea... validations: 
+      required: true
+  - type: textarea id: alternatives attributes: label: Alternatives considered description: What other approaches or workarounds have you tried? - type: textarea id: additional attributes: label: Additional context
+      description: Add screenshots, examples, references, or anything else that helps explain the idea.
