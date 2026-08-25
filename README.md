@@ -1,157 +1,401 @@
-# Glyph Terminal
+# Glyph
 
-A minimal Linux terminal emulator inspired by Nothing OS and block-oriented terminals.
+### A modern, customizable terminal for Linux.
 
-This is a real terminal project: Rust owns the PTY and shell lifecycle, React owns the UI, and xterm.js owns terminal rendering and interactive application compatibility.
+> **Your terminal. Your workflow.**
 
-## Current Milestone
+Glyph is a modern terminal emulator built for developers who want more
+control over their terminal experience --- from customizable UI and
+cursors to remappable shortcuts and split panes.
 
-Implemented:
+![Glyph Terminal](docs/images/glyph-hero.png)
 
-- Tauri 2 + React + TypeScript + Vite scaffold.
-- Rust `TerminalManager` with managed sessions.
-- Linux PTY spawning through `portable-pty`.
-- `$SHELL` detection with `/bin/bash` fallback.
-- Preserved base environment with `TERM=xterm-256color` and `COLORTERM=truecolor`.
-- Tauri commands: `create_terminal`, `write_terminal`, `resize_terminal`, `close_terminal`, `list_sessions`.
-- Typed Tauri events: `terminal://output`, `terminal://exit`, `terminal://error`, `terminal://state`, `terminal://semantic`.
-- xterm.js with Fit, Search, and WebGL fallback support.
-- PTY resize propagation.
-- Custom frameless title bar and scoped Tauri window permissions.
-- Tabs where each tab owns a separate backend terminal session.
-- Copy/paste handling for `Ctrl+Shift+C` and `Ctrl+Shift+V`.
-- OSC 133 parser and sourceable bash/zsh integration snippets.
-- Nothing Dark visual tokens, dot-grid background, and block metadata rail.
+[Download Glyph](../../releases/latest) · [Report a Bug](../../issues) ·
+[Request a Feature](../../issues)
 
-Not implemented yet:
+------------------------------------------------------------------------
 
-- Full block command editor.
-- Command text capture and reliable current-working-directory metadata.
-- Persisted history/settings.
-- Production packaging verification.
+## ✨ Features
 
-## Architecture
+### 🎨 Three UI Styles
 
-```text
-React / TypeScript
-  ├─ Terminal shell UI
-  ├─ Tabs and block metadata
-  └─ xterm.js renderer
-        │
-        ▼
-Tauri IPC
-        │
-        ▼
-Rust TerminalManager
-  ├─ portable-pty master/slave
-  ├─ shell process
-  ├─ reader thread
-  ├─ child wait thread
-  └─ OSC 133 parser
+Choose from three visual styles designed around a clean, monochromatic
+terminal experience.
+
+### 🖱️ Custom Cursor
+
+Make the cursor yours. Choose the cursor style and control its blink
+behavior.
+
+### ⌨️ Remappable Shortcuts
+
+Glyph comes with useful keyboard shortcuts for common terminal actions,
+and you can remap them to match your workflow.
+
+### 🔲 Panes
+
+Split your terminal into multiple independent sessions and work
+side-by-side without constantly switching windows.
+
+![Glyph Panes](docs/images/glyph-panes.png)
+
+### 📑 Multiple Tabs
+
+Keep independent terminal sessions organized inside a single Glyph
+window.
+
+### 🔎 Terminal Search
+
+Search through your terminal scrollback without leaving your workflow.
+
+### 📋 Clipboard Support
+
+Native copy and paste support for a smoother terminal experience.
+
+### ⚡ Native Terminal
+
+Glyph uses a real PTY and your system shell, providing compatibility
+with normal terminal applications rather than simulating a shell.
+
+### 🧱 Shell Integration
+
+OSC 133 shell integration allows Glyph to understand command boundaries
+and terminal state.
+
+------------------------------------------------------------------------
+
+## 🎛️ Make Glyph Yours
+
+Glyph gives you control over the visual experience as well as the
+terminal itself.
+
+Customize things such as:
+
+-   UI style
+-   Matrix background pattern
+-   Matrix color
+-   Background animation speed
+-   Interactive glow
+-   Dot opacity
+-   Cursor style
+-   Cursor blink animation
+-   Terminal font
+-   Font size
+-   Performance monitor
+
+![Glyph Settings](docs/images/glyph-settings.png)
+
+------------------------------------------------------------------------
+
+## ⌨️ Keyboard Shortcuts That Work Your Way
+
+Glyph provides shortcuts for common terminal actions, with support for
+remapping them to your preferred key combinations.
+
+Examples include:
+
+-   New terminal
+-   Close terminal
+-   Next / previous tab
+-   Split terminal horizontally
+-   Split terminal vertically
+-   Close active pane
+-   Copy
+-   Paste
+-   Search terminal buffer
+-   Select all
+-   Toggle settings
+
+![Glyph Keyboard Shortcuts](docs/images/glyph-customization.png)
+
+------------------------------------------------------------------------
+
+## 📦 Installation
+
+Download the latest release:
+
+**[Download Glyph](../../releases/latest)**
+
+### Ubuntu / Debian
+
+Download the `.deb` package from the release assets and install it with:
+
+``` bash
+sudo apt install ./Glyph_0.1.0_amd64.deb
 ```
 
-The PTY remains the source of truth. React does not parse ANSI output or emulate terminal behavior.
+Then launch **Glyph** from your applications menu.
 
-## Requirements
+### AppImage
 
-- Ubuntu 24.04 or newer.
-- Node.js 22.12 or newer.
-- Rust stable with `cargo`.
-- Tauri Linux system dependencies.
+Download the AppImage and make it executable:
 
-Common Ubuntu dependencies:
+``` bash
+chmod +x Glyph_0.1.0_amd64.AppImage
+```
 
-```bash
+Run it:
+
+``` bash
+./Glyph_0.1.0_amd64.AppImage
+```
+
+### RPM
+
+For RPM-based distributions, download the `.rpm` package from the
+release assets.
+
+``` bash
+sudo rpm -i Glyph-0.1.0-1.x86_64.rpm
+```
+
+Or, on distributions using `dnf`:
+
+``` bash
+sudo dnf install ./Glyph-0.1.0-1.x86_64.rpm
+```
+
+### Current Platform
+
+-   Linux
+-   Ubuntu tested
+-   x86_64
+
+Windows and macOS support are planned for future releases.
+
+------------------------------------------------------------------------
+
+## 🛠️ Built With
+
+  -----------------------------------------------------------------------
+  Technology                          Purpose
+  ----------------------------------- -----------------------------------
+  **Rust**                            Native backend, PTY management and
+                                      terminal lifecycle
+
+  **Tauri 2**                         Lightweight cross-platform desktop
+                                      application framework
+
+  **React**                           Application UI
+
+  **TypeScript**                      Frontend type safety
+
+  **Vite**                            Frontend development and bundling
+
+  **xterm.js**                        Terminal rendering and terminal
+                                      interaction
+
+  **portable-pty**                    Native PTY and shell management
+  -----------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+## 🏗️ Architecture
+
+Glyph separates the native terminal layer from the UI layer.
+
+``` text
+React / TypeScript
+  ├─ Tabs
+  ├─ Panes
+  ├─ Settings
+  ├─ Shortcuts
+  └─ xterm.js
+        │
+        │ Tauri IPC
+        ▼
+Rust / Tauri
+  └─ TerminalManager
+      ├─ portable-pty
+      ├─ Reader thread
+      ├─ Shell lifecycle
+      └─ OSC 133 parser
+        │
+        ▼
+Linux PTY / System Shell
+  └─ /bin/bash · /bin/zsh · $SHELL
+```
+
+### Terminal flow
+
+1.  React requests a new terminal session through Tauri IPC.
+2.  Rust creates a native PTY using `portable-pty`.
+3.  The user's system shell is launched inside the PTY.
+4.  A background Rust reader receives terminal output.
+5.  Rust emits terminal output and semantic events to the frontend.
+6.  xterm.js renders the terminal.
+7.  Keyboard input is sent from the frontend through Tauri back to the
+    PTY.
+8.  PTY resizing is propagated whenever the terminal viewport changes.
+
+The PTY remains the source of truth. React does not emulate the shell or
+terminal process.
+
+------------------------------------------------------------------------
+
+## 🔐 Shell Integration
+
+Glyph supports OSC 133 semantic shell integration for detecting command
+and prompt boundaries.
+
+Shell integration is opt-in and currently supports Bash and Zsh
+integration snippets.
+
+The integration can be installed locally without overwriting existing
+shell configuration.
+
+See the project documentation for setup details.
+
+------------------------------------------------------------------------
+
+## 🧪 Development
+
+### Requirements
+
+-   Ubuntu 24.04 or newer
+-   Node.js 22.12 or newer
+-   Rust stable
+-   Cargo
+-   Tauri Linux dependencies
+
+Install the common Ubuntu dependencies:
+
+``` bash
 sudo apt update
 sudo apt install -y build-essential curl wget file libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 ```
 
-Install Rust if it is missing:
+Install dependencies:
 
-```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-
-## Development
-
-```bash
+``` bash
 npm install
-npm run tauri dev
 ```
 
-Frontend-only preview:
+Start the development application:
 
-```bash
+``` bash
+npm run tauri:dev
+```
+
+Frontend-only development:
+
+``` bash
 npm run dev
 ```
 
-The frontend-only preview renders the xterm surface but cannot attach a real PTY because Tauri IPC is unavailable in a browser tab.
+> The browser-only Vite preview cannot attach to a real PTY because
+> Tauri IPC is unavailable in a normal browser tab.
 
-## Checks
+------------------------------------------------------------------------
 
-```bash
+## ✅ Checks
+
+Run the frontend type check:
+
+``` bash
 npm run typecheck
+```
+
+Run Rust tests:
+
+``` bash
 cargo test --manifest-path src-tauri/Cargo.toml
+```
+
+Run Rust checks:
+
+``` bash
 cargo check --manifest-path src-tauri/Cargo.toml
 ```
 
-## Shell Integration
+Build production packages:
 
-OSC 133 block metadata is opt-in. Do not overwrite shell startup files.
-
-Copy the snippets to a stable local location:
-
-```bash
-mkdir -p "$HOME/.local/share/nothing-terminal/shell-integration"
-cp src-tauri/shell-integration/nothing-terminal.* "$HOME/.local/share/nothing-terminal/shell-integration/"
-```
-
-Then add this line manually to the shell profile you choose:
-
-```bash
-source "$HOME/.local/share/nothing-terminal/shell-integration/nothing-terminal.sh"
-```
-
-For zsh, command execution start uses `preexec`. For bash, command execution start is emitted when `bash-preexec` has already created `preexec_functions`; otherwise prompt start and command finish still work.
-
-## Manual PTY Test Matrix
-
-Run these inside the Tauri app:
-
-```bash
-pwd
-ls
-cd /tmp
-pwd
-echo "hello"
-printf "hello\n"
-git status
-node --version
-npm --version
-python3 --version
-```
-
-Interactive smoke tests:
-
-```bash
-vim
-nano
-less README.md
-top
-```
-
-Signals:
-
-```text
-Ctrl+C
-Ctrl+D
-Ctrl+Z
-```
-
-## Production
-
-```bash
+``` bash
 npm run tauri build
 ```
 
-Production packaging should be performed only after the Rust checks, frontend typecheck, and manual PTY test matrix pass.
+------------------------------------------------------------------------
+
+## 🗺️ Roadmap
+
+### Current
+
+-   [x] Linux terminal support
+-   [x] Native PTY
+-   [x] Multiple tabs
+-   [x] Terminal panes
+-   [x] Three UI styles
+-   [x] Cursor customization
+-   [x] Remappable keyboard shortcuts
+-   [x] Terminal search
+-   [x] Native clipboard support
+-   [x] OSC 133 shell integration
+-   [x] Production Linux packages
+
+### Planned
+
+-   [ ] Windows support
+-   [ ] macOS support
+-   [ ] Persistent settings
+-   [ ] Persistent command history
+-   [ ] Improved shell integration
+-   [ ] More customization options
+-   [ ] Additional workflow-focused features
+
+------------------------------------------------------------------------
+
+## 🤝 Contributing
+
+Glyph is an open-source project and contributions are welcome.
+
+If you find a bug or have an idea:
+
+1.  Check the existing issues.
+2.  Open a new issue if it has not already been reported.
+3.  For code changes, create a focused pull request.
+4.  Explain what changed and why.
+
+Before contributing, please read the project's contribution guidelines
+when available.
+
+------------------------------------------------------------------------
+
+## 🐛 Feedback
+
+Found a bug?
+
+**[Open an issue](../../issues/new)**
+
+Have an idea?
+
+**[Request a feature](../../issues/new)**
+
+Feedback is especially valuable while Glyph is still evolving.
+
+------------------------------------------------------------------------
+
+## 📄 License
+
+Glyph is released under the **MIT License**.
+
+See [LICENSE](LICENSE) for the complete license text.
+
+------------------------------------------------------------------------
+
+## ☕ Support
+
+If you enjoy using Glyph and want to support its development, you can
+support the project through Buy Me a Coffee.
+
+Every bit of support helps keep the project moving forward.
+
+------------------------------------------------------------------------
+
+```{=html}
+<p align="center">
+```
+**Happy Glyping. 🖤**
+
+```{=html}
+</p>
+```
