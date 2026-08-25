@@ -1,0 +1,14 @@
+name: Bug Report description: Report a reproducible problem in Glyph title: "[Bug]: " labels: - bug body: - type: markdown attributes: value: | Thanks for taking the time to report a bug in Glyph. Please provide as 
+        much information as possible so the issue can be reproduced.
+  - type: textarea id: description attributes: label: What happened? description: Clearly describe the problem you encountered. placeholder: Tell us what went wrong... validations: required: true - type: textarea id: 
+    reproduction attributes:
+      label: Steps to reproduce description: Provide the exact steps needed to reproduce the issue. placeholder: | 1. Open Glyph 2. Create a pane 3. Run ... 4. Observe ... validations: required: true - type: textarea 
+    id: expected attributes:
+      label: What did you expect to happen? placeholder: Describe the expected behavior. validations: required: true - type: textarea id: actual attributes: label: What actually happened? placeholder: Describe the 
+      actual behavior.
+    validations: required: true - type: input id: version attributes: label: Glyph version placeholder: "v0.1.0" validations: required: true - type: input id: os attributes: label: Operating system placeholder: 
+      "Ubuntu 24.04"
+    validations: required: true - type: input id: shell attributes: label: Shell placeholder: "bash / zsh" - type: textarea id: logs attributes: label: Logs or terminal output description: Paste any relevant logs or 
+      error messages. render: shell
+  - type: textarea id: additional attributes: label: Additional context
+      description: Screenshots, videos, or anything else that might help.
