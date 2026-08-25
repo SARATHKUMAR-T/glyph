@@ -34,8 +34,8 @@ pub fn spawn_shell(session_id: &str, request: CreateTerminalRequest) -> Result<S
     command.env("LC_CTYPE", "en_US.UTF-8");
     command.env("TERM_PROGRAM", "Glyph");
     command.env("TERM_PROGRAM_VERSION", "0.1.0");
-    command.env("NOTHING_TERMINAL", "1");
-    command.env("NOTHING_TERMINAL_SESSION", session_id);
+    command.env("GLYPH_TERMINAL", "1");
+    command.env("GLYPH_TERMINAL_SESSION", session_id);
 
     if let Some(cwd) = cwd.as_ref() {
         command.cwd(cwd);

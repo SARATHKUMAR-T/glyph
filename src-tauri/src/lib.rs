@@ -37,6 +37,6 @@ pub fn run() {
         .run(tauri::generate_context!());
 
     if let Err(error) = result {
-        eprintln!("Nothing Terminal failed to start: {error}");
+        eprintln!("GLYPH Terminal failed to start: {error}");
     }
 }
