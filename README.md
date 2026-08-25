@@ -384,20 +384,14 @@ See [LICENSE](LICENSE) for the complete license text.
 
 ------------------------------------------------------------------------
 
-## ☕ Support
+## ☕ Support Glyph
 
-If you enjoy using Glyph and want to support its development, you can
-support the project through Buy Me a Coffee.
+Glyph is free and open source.
 
-Every bit of support helps keep the project moving forward.
+If you find it useful and want to support development, you can support the project on Buy Me a Coffee.
 
-------------------------------------------------------------------------
-
-```{=html}
-<p align="center">
-```
+<a href="https://buymeacoffee.com/sarathkumar">
+  <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" width="180" alt="Buy Me A Coffee">
+</a>
 **Happy Glyping. 🖤**
 
-```{=html}
-</p>
-```
