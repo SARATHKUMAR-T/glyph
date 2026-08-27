@@ -1,0 +1,37 @@
+Two changes so Tauri works on Ubuntu 20.04's WebKitGTK 2.38:
+
+1. tauri names webkit2gtk::WebView as a type but calls no WebKitGTK 2.40 API, so
+   the "v2_40" feature request is dropped -- it is what makes webkit2gtk-sys
+   demand 'webkit2gtk-4.1 >= 2.40'.
+
+2. Tauri's IPC prefers a custom-protocol POST and reads the request body, which
+   WebKitGTK < 2.40 cannot expose. Linux is excluded from that path (as Android
+   already is), so invoke() uses the postMessage interface instead. Both are
+   first-class Tauri transports; postMessage is the documented fallback.
+
+diff -ruN aorig/Cargo.toml anew/Cargo.toml
+--- aorig/Cargo.toml	2006-07-24 06:51:28.000000000 +0530
++++ anew/Cargo.toml	2026-08-26 13:12:25.740276455 +0530
+@@ -338,7 +338,7 @@
+ 
+ [target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies.webkit2gtk]
+ version = "2"
+-features = ["v2_40"]
++features = []
+ optional = true
+ 
+ [target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "windows", target_os = "macos"))'.dependencies.muda]
+diff -ruN aorig/scripts/ipc-protocol.js anew/scripts/ipc-protocol.js
+--- aorig/scripts/ipc-protocol.js	2006-07-24 06:51:28.000000000 +0530
++++ anew/scripts/ipc-protocol.js	2026-08-26 13:12:25.740276455 +0530
+@@ -17,7 +17,9 @@
+   let customProtocolIpcFailed = false
+ 
+   // on Android we never use it because Android does not have support to reading the request body
+-  const canUseCustomProtocol = osName !== 'android'
++  // on Linux we never use it either: WebKitGTK < 2.40 has no API to read a custom
++  // protocol request body, so the postMessage interface is the only usable transport
++  const canUseCustomProtocol = osName !== 'android' && osName !== 'linux'
+ 
+   function sendIpcMessage(message) {
+     const { cmd, callback, error, payload, options } = message

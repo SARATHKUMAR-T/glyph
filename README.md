@@ -157,6 +157,29 @@ Or, on distributions using `dnf`:
 sudo dnf install ./Glyph-0.1.0-1.x86_64.rpm
 ```
 
+### Build from source (older Ubuntu / GLIBC mismatch)
+
+The prebuilt packages are compiled on a recent Ubuntu. On an older release such
+as Ubuntu 20.04 they fail to start with:
+
+``` text
+/lib/x86_64-linux-gnu/libc.so.6: version `GLIBC_2.34' not found
+```
+
+GLIBC cannot be upgraded on its own, so build Glyph against your own system
+libraries instead:
+
+``` bash
+scripts/build-local.sh
+```
+
+This compiles Glyph inside an Ubuntu 20.04 container and installs the resulting
+native binary to `~/.local/bin/glyph` — no `sudo`, and no packages added to your
+system. See [docs/building-on-ubuntu-20.04.md](docs/building-on-ubuntu-20.04.md)
+for the details.
+
+------------------------------------------------------------------------
+
 ### Current Platform
 
 -   Linux
