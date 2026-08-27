@@ -581,6 +581,24 @@ export function TerminalView({
             }
             pendingOutputMap.delete(assignedId);
           }
+
+          if (pane.startupCommand) {
+            let cmdStr = "";
+            if (typeof pane.startupCommand === "string") {
+              cmdStr = pane.startupCommand.trim();
+            } else if (pane.startupCommand.program) {
+              cmdStr = `${pane.startupCommand.program} ${pane.startupCommand.args.join(" ")}`.trim();
+            }
+
+            if (cmdStr) {
+              const sid = assignedId;
+              setTimeout(() => {
+                void writeTerminalData(sid, `${cmdStr}\r`).catch((err) => {
+                  console.error("[TerminalView] Startup command failed:", err);
+                });
+              }, 300);
+            }
+          }
         }
 
         fitAndResize();
@@ -732,6 +750,11 @@ export function TerminalView({
       <div className="pane-header-bar">
         <div className="pane-header-left">
           <span className={`pane-status-dot pane-status-${pane.status}`} aria-hidden="true" />
+          {pane.title && (
+            <span style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.5px", color: "var(--nothing-gray-100)", textTransform: "uppercase" }}>
+              {pane.title}
+            </span>
+          )}
         </div>
         <div className="pane-header-controls">
           <button

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 
+import "../styles/workspace.css";
 import { Settings } from "../components/settings/Settings";
 import { TerminalPanePortals } from "../components/terminal/TerminalPanePortals";
 import { TerminalSplitView } from "../components/terminal/TerminalSplitView";
@@ -8,12 +9,18 @@ import { TerminalTabs } from "../components/tabs/TerminalTabs";
 import { TitleBar } from "../components/window/TitleBar";
 import { WindowResizeHandles } from "../components/window/WindowResizeHandles";
 import { MatrixDotBackground } from "../components/terminal/MatrixDotBackground";
+import { CreateWorkspaceModal } from "../components/workspace/CreateWorkspaceModal";
+import { SaveCurrentWorkspaceModal } from "../components/workspace/SaveCurrentWorkspaceModal";
+import { WorkspaceManagerModal } from "../components/workspace/WorkspaceManagerModal";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useTerminalBlocks } from "../hooks/useTerminalBlocks";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { useKeybindings } from "../hooks/useKeybindings";
+import { useWorkspaces } from "../hooks/useWorkspaces";
 import { isTauriRuntime } from "../lib/terminal/events";
 import { getTerminalCwd } from "../hooks/useTerminalSession";
+import { workspaceLayoutToSplitNode } from "../lib/workspace/treeConverter";
+import type { Workspace } from "../lib/workspace/types";
 import {
   createId,
   createPaneNode,
@@ -57,6 +64,27 @@ export function App() {
   const { blocksByTab, clearBlocks, ingestSemanticEvent } = useTerminalBlocks();
   const { settings, updateSettings } = useTerminalSettings();
   const { keybindings, updateKeybinding, resetKeybindings } = useKeybindings();
+  const { workspaces, saveWorkspace, deleteWorkspace } = useWorkspaces();
+
+  const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+  const [saveCurrentWorkspaceOpen, setSaveCurrentWorkspaceOpen] = useState(false);
+  const [manageWorkspacesOpen, setManageWorkspacesOpen] = useState(false);
+
+  const handleOpenWorkspace = useCallback((workspace: Workspace) => {
+    const { rootNode } = workspaceLayoutToSplitNode(workspace.layout, workspace.panes);
+    const panes = getAllPanesInTree(rootNode);
+
+    const newTab: TerminalTabModel = {
+      clientId: createId(),
+      title: workspace.name,
+      rootNode,
+      activePaneId: panes[0]?.paneId || createId(),
+    };
+
+    setTabs((current) => [...current, newTab]);
+    setActiveTabId(newTab.clientId);
+    setSearchOpen(false);
+  }, []);
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.clientId === activeTabId) ?? tabs[0],
@@ -238,7 +266,9 @@ export function App() {
           if (!pane) return tab;
 
           const tabIndex = current.findIndex((t) => t.clientId === tab.clientId) + 1;
-          const displayTitle = formatTabTitle(tabIndex > 0 ? tabIndex : 1);
+          const fallbackTitle = formatTabTitle(tabIndex > 0 ? tabIndex : 1);
+          const newPaneTitle = pane.title || fallbackTitle;
+          const newTabTitle = tab.title || fallbackTitle;
 
           const updatedRoot = updatePaneInTree(tab.rootNode, paneId, {
             sessionId: info.sessionId,
@@ -247,13 +277,13 @@ export function App() {
             cols: info.cols,
             rows: info.rows,
             status: "running",
-            title: displayTitle,
+            title: newPaneTitle,
           });
 
           return {
             ...tab,
             rootNode: updatedRoot,
-            title: displayTitle,
+            title: newTabTitle,
           };
         }),
       );
@@ -267,14 +297,13 @@ export function App() {
         const pane = findPaneNode(tab.rootNode, paneId);
         if (!pane) return tab;
 
-        const tabIndex = current.findIndex((t) => t.clientId === tab.clientId) + 1;
-        const displayTitle = formatTabTitle(tabIndex > 0 ? tabIndex : 1);
+        // Preserve custom pane title (e.g., workspace pane names) if configured
+        const newPaneTitle = pane.title || title;
+        const updatedRoot = updatePaneInTree(tab.rootNode, paneId, { title: newPaneTitle });
 
-        const updatedRoot = updatePaneInTree(tab.rootNode, paneId, { title: displayTitle });
         return {
           ...tab,
           rootNode: updatedRoot,
-          title: displayTitle,
         };
       }),
     );
@@ -349,6 +378,8 @@ export function App() {
     onPrevTab: handlePrevTab,
     onSearch: () => setSearchOpen(true),
     onToggleSettings: () => setSettingsOpen((open) => !open),
+    onOpenWorkspace: () => setManageWorkspacesOpen(true),
+    onSaveWorkspace: () => setSaveCurrentWorkspaceOpen(true),
   });
 
   return (
@@ -366,6 +397,11 @@ export function App() {
         onSearch={() => setSearchOpen(true)}
         onToggleSettings={() => setSettingsOpen((open) => !open)}
         showPerformanceBar={settings.showPerformanceBar}
+        workspaces={workspaces}
+        onOpenWorkspace={handleOpenWorkspace}
+        onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+        onSaveCurrentWorkspace={() => setSaveCurrentWorkspaceOpen(true)}
+        onManageWorkspaces={() => setManageWorkspacesOpen(true)}
       />
       <main className="workspace">
         <TerminalTabs
@@ -438,6 +474,25 @@ export function App() {
           onUpdateSettings={updateSettings}
           onUpdateKeybinding={updateKeybinding}
           onResetKeybindings={resetKeybindings}
+        />
+        <CreateWorkspaceModal
+          isOpen={createWorkspaceOpen}
+          onClose={() => setCreateWorkspaceOpen(false)}
+          onSave={saveWorkspace}
+        />
+        <SaveCurrentWorkspaceModal
+          isOpen={saveCurrentWorkspaceOpen}
+          activeTab={activeTab}
+          onClose={() => setSaveCurrentWorkspaceOpen(false)}
+          onSave={saveWorkspace}
+        />
+        <WorkspaceManagerModal
+          isOpen={manageWorkspacesOpen}
+          workspaces={workspaces}
+          onClose={() => setManageWorkspacesOpen(false)}
+          onOpenWorkspace={handleOpenWorkspace}
+          onSaveWorkspace={saveWorkspace}
+          onDeleteWorkspace={deleteWorkspace}
         />
       </main>
     </div>

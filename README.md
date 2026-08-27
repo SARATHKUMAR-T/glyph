@@ -41,6 +41,10 @@ side-by-side without constantly switching windows.
 
 ![Glyph Panes](docs/images/glyph-panes.png)
 
+### 🗂️ Workspaces
+
+Save and reopen your entire development environment with one click. Workspaces persist pane split layouts, working directories (CWD), custom pane titles, and automatic startup commands (e.g. `npm run dev`, `cargo run`).
+
 ### 📑 Multiple Tabs
 
 Keep independent terminal sessions organized inside a single Glyph

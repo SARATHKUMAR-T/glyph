@@ -53,7 +53,8 @@ body,
   border-bottom: 1px solid rgba(255, 255, 255, 0.14);
   background: linear-gradient(180deg, #18181c 0%, #0d0d10 100%);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
-  z-index: 10;
+  z-index: 100;
+  overflow: visible !important;
   user-select: none;
 }
 
@@ -64,7 +65,8 @@ body,
   justify-content: space-between;
   background: transparent;
   user-select: none;
-  z-index: 5;
+  z-index: 100;
+  overflow: visible !important;
 }
 
 .brand-lockup {
@@ -251,6 +253,9 @@ body,
   align-items: center;
   gap: 4px;
   padding-right: 8px;
+  position: relative;
+  overflow: visible !important;
+  z-index: 101;
 }
 
 .title-action,

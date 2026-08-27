@@ -1,6 +1,8 @@
 import { APP_NAME } from "../../lib/constants";
 import { WindowControls } from "./WindowControls";
 import { PerformanceBar } from "../ui/PerformanceBar";
+import { WorkspacesMenu } from "../workspace/WorkspacesMenu";
+import type { Workspace } from "../../lib/workspace/types";
 
 type TitleBarProps = {
   onNewTerminal?: () => void;
@@ -8,6 +10,11 @@ type TitleBarProps = {
   onSearch: () => void;
   onToggleSettings: () => void;
   showPerformanceBar?: boolean;
+  workspaces?: Workspace[];
+  onOpenWorkspace?: (workspace: Workspace) => void;
+  onCreateWorkspace?: () => void;
+  onSaveCurrentWorkspace?: () => void;
+  onManageWorkspaces?: () => void;
 };
 
 export function TitleBar({
@@ -16,6 +23,11 @@ export function TitleBar({
   onSearch,
   onToggleSettings,
   showPerformanceBar = true,
+  workspaces,
+  onOpenWorkspace,
+  onCreateWorkspace,
+  onSaveCurrentWorkspace,
+  onManageWorkspaces,
 }: TitleBarProps) {
   return (
     <header className="title-bar-container" data-tauri-drag-region>
@@ -30,6 +42,15 @@ export function TitleBar({
           </div>
         </div>
         <div className="title-actions">
+          {workspaces && onOpenWorkspace && (
+            <WorkspacesMenu
+              workspaces={workspaces}
+              onOpenWorkspace={onOpenWorkspace}
+              onCreateWorkspace={onCreateWorkspace!}
+              onSaveCurrentWorkspace={onSaveCurrentWorkspace!}
+              onManageWorkspaces={onManageWorkspaces!}
+            />
+          )}
         {onNewWindow && (
           <button
             aria-label="New Terminal Window (Ctrl+Shift+N)"
