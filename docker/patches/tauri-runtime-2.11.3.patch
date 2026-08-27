@@ -1,0 +1,17 @@
+tauri-runtime names webkit2gtk::WebView in two struct fields and calls no
+WebKitGTK 2.40 API, so the "v2_40" feature request is dropped -- it is one of the
+four requests that make webkit2gtk-sys demand 'webkit2gtk-4.1 >= 2.40', which
+Ubuntu 20.04's WebKitGTK 2.38.6 cannot satisfy.
+
+diff -ruN rorig/Cargo.toml rnew/Cargo.toml
+--- rorig/Cargo.toml	2006-07-24 06:51:28.000000000 +0530
++++ rnew/Cargo.toml	2026-08-26 13:13:29.747674370 +0530
+@@ -102,7 +102,7 @@
+ 
+ [target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies.webkit2gtk]
+ version = "=2.0"
+-features = ["v2_40"]
++features = []
+ 
+ [target.'cfg(target_os = "android")'.dependencies.jni]
+ version = "0.21"
