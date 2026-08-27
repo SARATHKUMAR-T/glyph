@@ -3,10 +3,17 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-export const supabase = createClient(
-  supabaseUrl,
-  supabasePublishableKey
-);
+/**
+ * Supabase only backs the optional `quote` builtin. `createClient` throws when
+ * the credentials are missing, and this module is reachable from the terminal's
+ * builtin commands, so an unconfigured build (no `.env`) would fail to boot at
+ * all rather than simply losing quotes. Skip the client instead and let
+ * `getRandomQuote` report it like any other lookup failure.
+ */
+export const supabase =
+  supabaseUrl && supabasePublishableKey
+    ? createClient(supabaseUrl, supabasePublishableKey)
+    : null;
 
 export function formatErrorMessage(error: unknown): string {
   if (!error) return "Unknown error";
@@ -28,6 +35,12 @@ export function formatErrorMessage(error: unknown): string {
 
 export async function getRandomQuote(): Promise<{ quote: string; author: string }> {
   try {
+    if (!supabase) {
+      throw new Error(
+        "Quotes are unavailable: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY were not set when this build was made."
+      );
+    }
+
     const { data, error } = await supabase.rpc("get_random_quote");
 
     if (error) {
