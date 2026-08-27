@@ -193,7 +193,28 @@ export function TerminalView({
     try {
       const dims = fitAddon.proposeDimensions();
       if (dims && dims.cols > 0 && dims.rows > 0) {
-        terminal.resize(dims.cols, dims.rows);
+        let targetRows = dims.rows;
+
+        const renderService = (
+          terminal as unknown as {
+            _core?: { _renderService?: { dimensions?: { css?: { cell?: { height: number } } } } };
+          }
+        )._core?._renderService;
+        const cellHeight = renderService?.dimensions?.css?.cell?.height;
+
+        if (cellHeight && cellHeight > 0) {
+          const style = window.getComputedStyle(host);
+          const paddingTop = parseFloat(style.paddingTop) || 0;
+          const paddingBottom = parseFloat(style.paddingBottom) || 0;
+          const availableHeight = host.clientHeight - paddingTop - paddingBottom;
+          const maxRows = Math.floor(availableHeight / cellHeight);
+
+          if (maxRows > 0 && targetRows > maxRows) {
+            targetRows = maxRows;
+          }
+        }
+
+        terminal.resize(dims.cols, targetRows);
       } else {
         fitAddon.fit();
       }
