@@ -92,8 +92,6 @@ export function TerminalPanePortals({
     if (!containersRef.current.has(pane.paneId)) {
       const el = document.createElement("div");
       el.className = "pane-portal-container";
-      el.style.width = "100%";
-      el.style.height = "100%";
       containersRef.current.set(pane.paneId, el);
     }
   }
@@ -114,7 +112,16 @@ export function TerminalPanePortals({
   // rendered by TerminalSplitView. useLayoutEffect ensures this runs
   // synchronously after DOM mutations but before the browser paints,
   // so the user never sees a frame where the terminal is misplaced.
+  //
+  // Runs on every render (no dependency array) because React's DOM
+  // reconciliation can reuse elements at the same position — a
+  // `data-pane-target="P3"` div might become `data-pane-target="P2"`
+  // with P3's container still inside. We rely on `appendChild`
+  // automatically moving elements to handle cross-contamination:
+  // when pane P3's iteration runs, it moves P3's container from
+  // P2's target to P3's target, leaving P2's target with only P2.
   useLayoutEffect(() => {
+    let didReparent = false;
     for (const pane of panes) {
       const target = document.querySelector<HTMLElement>(
         `[data-pane-target="${pane.paneId}"]`,
@@ -122,7 +129,18 @@ export function TerminalPanePortals({
       const container = containersRef.current.get(pane.paneId);
       if (target && container && container.parentElement !== target) {
         target.appendChild(container);
+        didReparent = true;
       }
+    }
+    // After reparenting, force xterm instances to recalculate their
+    // dimensions since their host containers may have changed size.
+    if (didReparent) {
+      requestAnimationFrame(() => {
+        window.dispatchEvent(new Event("resize"));
+      });
+      setTimeout(() => {
+        window.dispatchEvent(new Event("resize"));
+      }, 50);
     }
   });
 

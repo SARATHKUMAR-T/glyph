@@ -1,7 +1,6 @@
 .terminal-view {
   position: relative;
-  width: 100%;
-  height: 100%;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -9,7 +8,9 @@
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
-  border: 1px solid transparent;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  overflow: hidden;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   box-sizing: border-box;
 }
@@ -18,11 +19,12 @@
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
 }
 
 .terminal-view.is-active-pane {
-  border-color: rgba(255, 48, 48, 0.45);
-  box-shadow: inset 0 0 10px rgba(255, 48, 48, 0.1);
+  border-color: rgba(255, 48, 48, 0.65);
+  box-shadow: 0 0 14px rgba(255, 48, 48, 0.25), inset 0 0 8px rgba(255, 48, 48, 0.06);
 }
 
 .pane-header-bar {
@@ -135,6 +137,8 @@
 
 /* Split Tree Containers & Resizers */
 .split-container {
+  display: flex;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -148,6 +152,26 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding: 3px;
+  box-sizing: border-box;
+}
+
+.pane-portal-target {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pane-portal-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .split-resizer {
@@ -191,9 +215,10 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   background: transparent;
 }
 
@@ -240,7 +265,7 @@
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
-  padding: 10px 0 10px 14px !important;
+  padding: 6px 0 0 14px !important;
   overflow: hidden;
   background: transparent !important;
 }
@@ -341,6 +366,15 @@
   animation: glyph-cursor-blink 1s ease-in-out infinite !important;
 }
 
+/* Inactive Pane Cursor Styling - Dimmed opacity & non-blinking red cursor */
+.terminal-view:not(.is-active-pane) .xterm .xterm-cursor-layer {
+  opacity: 0.45 !important;
+}
+
+.terminal-view:not(.is-active-pane) .xterm .xterm-cursor-blink {
+  animation: none !important;
+}
+
 .terminal-search {
   position: absolute;
   top: 42px;
@@ -392,7 +426,7 @@
   }
 
   .xterm-host {
-    padding: 10px;
+    padding: 6px 0 0 10px;
   }
 }
 

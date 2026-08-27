@@ -22,9 +22,9 @@ export function TerminalSplitView({
   if (node.type === "pane") {
     return (
       <div
+        key={node.pane.paneId}
         className="pane-portal-target"
         data-pane-target={node.pane.paneId}
-        style={{ width: "100%", height: "100%" }}
       />
     );
   }
@@ -36,10 +36,11 @@ export function TerminalSplitView({
 
   return (
     <div
+      key={node.id}
       className={`split-container split-container-${node.direction}`}
-      style={{ display: "flex", flexDirection: flexDir, width: "100%", height: "100%" }}
+      style={{ display: "flex", flexDirection: flexDir, width: "100%", height: "100%", flex: "1 1 0%" }}
     >
-      <div className="split-pane-wrapper" style={flexStyle0}>
+      <div key={`${node.id}-0`} className="split-pane-wrapper" style={flexStyle0}>
         <TerminalSplitView
           node={node.children[0]}
           onResizeSplit={onResizeSplit}
@@ -47,11 +48,12 @@ export function TerminalSplitView({
       </div>
 
       <SplitResizer
+        key={`${node.id}-resizer`}
         direction={node.direction}
         onResize={(newRatio) => onResizeSplit(node.id, newRatio)}
       />
 
-      <div className="split-pane-wrapper" style={flexStyle1}>
+      <div key={`${node.id}-1`} className="split-pane-wrapper" style={flexStyle1}>
         <TerminalSplitView
           node={node.children[1]}
           onResizeSplit={onResizeSplit}

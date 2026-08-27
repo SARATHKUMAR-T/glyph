@@ -28,8 +28,9 @@ import type {
 } from "../../lib/terminal/types";
 import { matchesKeyCombo, type KeybindingsConfig } from "../../hooks/useKeybindings";
 import type { TerminalSettings } from "../../hooks/useTerminalSettings";
-
 import { TerminalBlock } from "./TerminalBlock";
+
+const pendingOutputMap = new Map<string, string[]>();
 
 type TerminalViewProps = {
   active: boolean;
@@ -180,20 +181,25 @@ export function TerminalView({
   const fitAndResize = useCallback(() => {
     const terminal = terminalRef.current;
     const fitAddon = fitAddonRef.current;
-    if (!terminal || !fitAddon) {
+    const host = hostRef.current;
+    if (!terminal || !fitAddon || !host) {
+      return;
+    }
+
+    if (host.clientWidth === 0 || host.clientHeight === 0) {
       return;
     }
 
     try {
       const dims = fitAddon.proposeDimensions();
-      if (dims && dims.cols > 10) {
-        terminal.resize(dims.cols - 2, dims.rows);
+      if (dims && dims.cols > 0 && dims.rows > 0) {
+        terminal.resize(dims.cols, dims.rows);
       } else {
         fitAddon.fit();
       }
       restoreScrollPosition();
-    } catch (error) {
-      propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error));
+      terminal.refresh(0, Math.max(0, terminal.rows - 1));
+    } catch {
       return;
     }
 
@@ -447,24 +453,26 @@ export function TerminalView({
       try {
         propsRef.current.onSessionStatus(pane.paneId, "starting");
 
-        const pendingOutputBySession = new Map<string, string[]>();
         let assignedId: string | null = pane.sessionId ?? null;
+        if (pane.sessionId) {
+          sessionIdRef.current = pane.sessionId;
+        }
 
         const dataUnlisten = await listenTerminalOutput((evt) => {
-          if (assignedId) {
-            if (evt.sessionId === assignedId) {
-              terminal.write(evt.data);
-            }
+          const currentId = sessionIdRef.current;
+          if (currentId && evt.sessionId === currentId) {
+            terminal.write(evt.data);
           } else {
-            const list = pendingOutputBySession.get(evt.sessionId) ?? [];
+            const list = pendingOutputMap.get(evt.sessionId) ?? [];
             list.push(evt.data);
-            pendingOutputBySession.set(evt.sessionId, list);
+            pendingOutputMap.set(evt.sessionId, list);
           }
         });
         unlisteners.push(dataUnlisten);
 
         const eventUnlisten = await listenTerminalSemantic((evt) => {
-          if (assignedId && evt.sessionId === assignedId) {
+          const currentId = sessionIdRef.current;
+          if (currentId && evt.sessionId === currentId) {
             propsRef.current.onSemanticEvent(pane.paneId, evt);
           }
         });
@@ -545,10 +553,6 @@ export function TerminalView({
           assignedId = pane.sessionId;
           sessionIdRef.current = pane.sessionId;
           propsRef.current.onSessionStatus(pane.paneId, "running");
-          fitAndResize();
-          if (isPaneActive) {
-            terminal.focus();
-          }
         } else {
           propsRef.current.onSessionStatus(pane.paneId, "starting");
 
@@ -567,21 +571,24 @@ export function TerminalView({
           sessionIdRef.current = info.sessionId;
           lastResizedSessionIdRef.current = info.sessionId;
           propsRef.current.onSessionReady(pane.paneId, info);
-          fitAndResize();
-          if (isPaneActive) {
-            terminal.focus();
-          }
         }
 
         if (assignedId) {
-          const sessionPending = pendingOutputBySession.get(assignedId);
+          const sessionPending = pendingOutputMap.get(assignedId);
           if (sessionPending && sessionPending.length > 0) {
             for (const chunk of sessionPending) {
               terminal.write(chunk);
             }
+            pendingOutputMap.delete(assignedId);
           }
         }
-        pendingOutputBySession.clear();
+
+        fitAndResize();
+        if (isPaneActive) {
+          terminal.focus();
+        } else {
+          terminal.blur();
+        }
 
 
 
@@ -649,6 +656,8 @@ export function TerminalView({
         terminalRef.current?.focus();
       }, 25);
       return () => clearTimeout(timer);
+    } else {
+      terminalRef.current?.blur();
     }
   }, [active, isPaneActive, fitAndResize]);
 
@@ -656,13 +665,13 @@ export function TerminalView({
     const terminal = terminalRef.current;
     if (terminal && settings) {
       terminal.options.cursorStyle = settings.cursorStyle;
-      terminal.options.cursorBlink = settings.cursorBlink;
+      terminal.options.cursorBlink = active && isPaneActive ? (settings.cursorBlink ?? true) : false;
       if (settings.fontSize && terminal.options.fontSize !== settings.fontSize) {
         terminal.options.fontSize = settings.fontSize;
         fitAndResize();
       }
     }
-  }, [fitAndResize, settings?.cursorBlink, settings?.cursorStyle, settings?.fontSize]);
+  }, [active, isPaneActive, fitAndResize, settings?.cursorBlink, settings?.cursorStyle, settings?.fontSize]);
 
   useEffect(() => {
     if (searchOpen && isPaneActive) {
@@ -706,8 +715,12 @@ export function TerminalView({
     terminalRef.current?.focus();
   };
 
-  const showPaneGlow = isSplit && isPaneActive;
-  const activeClass = active && showPaneGlow ? "terminal-view is-active is-active-pane" : active ? "terminal-view is-active" : "terminal-view";
+  const activeClass =
+    active && isPaneActive
+      ? "terminal-view is-active is-active-pane"
+      : active
+        ? "terminal-view is-active"
+        : "terminal-view";
 
   return (
     <div
