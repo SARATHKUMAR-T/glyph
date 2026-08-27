@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { splitNodeToWorkspaceLayout } from "../../lib/workspace/treeConverter";
-import type { TerminalTabModel } from "../../lib/terminal/types";
+import { getTerminalCwd } from "../../hooks/useTerminalSession";
+import type { SplitNode, TerminalPaneModel, TerminalTabModel } from "../../lib/terminal/types";
 import type { Workspace, WorkspacePaneConfig } from "../../lib/workspace/types";
 
 type SaveCurrentWorkspaceModalProps = {
@@ -27,6 +28,46 @@ export function SaveCurrentWorkspaceModal({
       const converted = splitNodeToWorkspaceLayout(activeTab.rootNode);
       setPanes(converted.panes);
       setName(activeTab.title || "Glyph Workspace");
+
+      let cancelled = false;
+      async function updateLiveCwds() {
+        const paneModels: TerminalPaneModel[] = [];
+        function collectPanes(node: SplitNode) {
+          if (node.type === "pane") {
+            paneModels.push(node.pane);
+          } else {
+            collectPanes(node.children[0]);
+            collectPanes(node.children[1]);
+          }
+        }
+        collectPanes(activeTab.rootNode);
+
+        const updatedPanes = await Promise.all(
+          converted.panes.map(async (paneConfig) => {
+            const matchedPane = paneModels.find((p) => p.paneId === paneConfig.id);
+            if (matchedPane?.sessionId) {
+              try {
+                const liveCwd = await getTerminalCwd(matchedPane.sessionId);
+                if (liveCwd) {
+                  return { ...paneConfig, cwd: liveCwd };
+                }
+              } catch (err) {
+                console.error("Failed to fetch live CWD for session:", err);
+              }
+            }
+            return paneConfig;
+          }),
+        );
+
+        if (!cancelled) {
+          setPanes(updatedPanes);
+        }
+      }
+
+      void updateLiveCwds();
+      return () => {
+        cancelled = true;
+      };
     }
   }, [isOpen, activeTab]);
 
