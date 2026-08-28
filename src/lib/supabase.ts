@@ -1,12 +1,23 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 
-export const supabase = createClient(
-  supabaseUrl,
-  supabasePublishableKey
-);
+// Lazily initialized so that missing env vars don't throw at module load time
+// and crash the entire app (which would cause a blank screen in production).
+let _supabase: SupabaseClient | null = null;
+
+function getSupabaseClient(): SupabaseClient {
+  if (!_supabase) {
+    if (!supabaseUrl || !supabasePublishableKey) {
+      throw new Error(
+        "Supabase env vars (VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY) are not set."
+      );
+    }
+    _supabase = createClient(supabaseUrl, supabasePublishableKey);
+  }
+  return _supabase;
+}
 
 export function formatErrorMessage(error: unknown): string {
   if (!error) return "Unknown error";
@@ -28,7 +39,7 @@ export function formatErrorMessage(error: unknown): string {
 
 export async function getRandomQuote(): Promise<{ quote: string; author: string }> {
   try {
-    const { data, error } = await supabase.rpc("get_random_quote");
+    const { data, error } = await getSupabaseClient().rpc("get_random_quote");
 
     if (error) {
       throw new Error(formatErrorMessage(error));
