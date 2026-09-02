@@ -354,7 +354,10 @@ export function TerminalView({
           if (!text) return;
           const sessionId = sessionIdRef.current;
           if (sessionId && isTauriRuntime()) {
-            void writeTerminalData(sessionId, text);
+            // Use xterm's paste() so bracketed paste mode (\x1b[200~...\x1b[201~) is
+            // automatically applied when the active program (e.g. nano) has enabled it.
+            // This preserves newlines and document structure in full-screen editors.
+            terminalRef.current?.paste(text);
           } else if (mockSessionRef.current) {
             mockSessionRef.current.handleData(text);
           }

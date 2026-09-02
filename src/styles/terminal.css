@@ -265,19 +265,31 @@
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
+  /* 12px right padding: fit-addon uses this as available width so the
+     canvas columns are calculated to stop well before the scrollbar */
   padding: 6px 12px 6px 12px !important;
   overflow: hidden;
   background: transparent !important;
 }
 
 .xterm {
-  padding: 0 !important;
   background-color: transparent !important;
 }
 
+.xterm-screen {
+  margin-right: 0 !important;
+}
+
 .xterm-viewport {
+  /* Extend the viewport (and therefore the scrollbar) rightward to cover
+     the 12px padding on .xterm-host, so the scrollbar sits at the true
+     right edge with no gap visible next to it.
+     The canvas is still bounded by the columns calculated from the
+     padded width, so text never renders under the scrollbar. */
+  width: calc(100% + 12px) !important;
   background-color: transparent !important;
-  scrollbar-width: none !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(255, 48, 48, 0.45) rgba(0, 0, 0, 0.15) !important;
 }
 
 /* Thin 5px Red Glow Scrollbar Aligned at Right Edge */
