@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import type { IDisposable, Terminal as XTerm } from "@xterm/xterm";
+import type { IDisposable, ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { readText as clipboardReadText } from "@tauri-apps/plugin-clipboard-manager";
 
 import { createNothingXterm } from "../../lib/terminal/xterm";
@@ -42,6 +42,8 @@ type TerminalViewProps = {
   keybindings: KeybindingsConfig;
   searchOpen: boolean;
   settings?: TerminalSettings;
+  /** Active xterm palette from useTerminalTheme — applied at creation and live on change */
+  xtermTheme?: ITheme;
   canClosePane?: boolean;
   onActivatePane: (paneId: string) => void;
   onCloseSearch: () => void;
@@ -61,6 +63,7 @@ type TerminalViewProps = {
   onTitleChange?: (paneId: string, title: string) => void;
   onToggleSettings?: () => void;
 };
+
 
 function formatError(error: unknown): string {
   if (error instanceof Error) {
@@ -96,6 +99,7 @@ export function TerminalView({
   pane,
   searchOpen,
   settings,
+  xtermTheme,
   tabId,
 }: TerminalViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -256,6 +260,7 @@ export function TerminalView({
       cursorStyle: settings?.cursorStyle,
       cursorBlink: settings?.cursorBlink,
       fontSize: settings?.fontSize,
+      xtermTheme,
     });
     const fitAddon = new FitAddon();
     const searchAddon = new SearchAddon();
@@ -516,6 +521,7 @@ export function TerminalView({
             };
           }),
           terminal.onData((data) => {
+            window.dispatchEvent(new CustomEvent("glyph:terminal-activity"));
             if (!sessionIdRef.current) return;
             const sid = sessionIdRef.current;
 
@@ -670,6 +676,14 @@ export function TerminalView({
       sessionIdRef.current = null;
     };
   }, [fitAndResize, pane.paneId]);
+
+  // Live-update the xterm palette when the theme changes, without restarting.
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal || !xtermTheme) return;
+    terminal.options.theme = xtermTheme;
+    terminal.refresh(0, Math.max(0, terminal.rows - 1));
+  }, [xtermTheme]);
 
   useEffect(() => {
     if (!active && terminalRef.current) {

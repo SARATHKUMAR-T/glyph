@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
+import type { ITheme } from "@xterm/xterm";
 
 import type {
   TerminalBlock as TerminalBlockModel,
@@ -21,6 +22,8 @@ type TerminalPanePortalsProps = {
   paneCount: number;
   searchOpen: boolean;
   settings?: TerminalSettings;
+  /** Active xterm palette from useTerminalTheme — threaded into every pane */
+  xtermTheme?: ITheme;
   tabId: string;
   onActivatePane: (paneId: string) => void;
   onClosePane?: (paneId: string) => void;
@@ -78,6 +81,7 @@ export function TerminalPanePortals({
   paneCount,
   searchOpen,
   settings,
+  xtermTheme,
   tabId,
 }: TerminalPanePortalsProps) {
   // Stable container elements keyed by paneId.
@@ -179,6 +183,7 @@ export function TerminalPanePortals({
             pane={pane}
             searchOpen={searchOpen}
             settings={settings}
+            xtermTheme={xtermTheme}
             tabId={tabId}
           />,
           container,

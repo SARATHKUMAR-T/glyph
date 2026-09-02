@@ -11,10 +11,10 @@
   gap: 6px;
   height: 28px;
   padding: 0 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line);
   border-radius: 4px;
-  color: var(--nothing-gray-100, #e0e0e0);
+  color: var(--glyph-fg);
   font-size: 11px;
   font-weight: 500;
   letter-spacing: 0.5px;
@@ -25,9 +25,9 @@
 
 .workspace-menu-trigger:hover,
 .workspace-menu-trigger.is-open {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.25);
-  color: var(--nothing-white, #ffffff);
+  background: var(--glyph-accent-dim);
+  border-color: var(--glyph-accent);
+  color: var(--glyph-fg);
 }
 
 .workspace-menu-dropdown {
@@ -36,10 +36,10 @@
   right: 0;
   left: auto;
   width: 280px;
-  background: #0c0c0f;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line-strong);
   border-radius: 8px;
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.95);
+  box-shadow: 0 12px 36px var(--glyph-shadow);
   z-index: 99999;
   padding: 6px;
   display: flex;
@@ -65,8 +65,8 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: var(--nothing-gray-500, #737373);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--glyph-fg-muted);
+  border-bottom: 1px solid var(--glyph-line);
   margin-bottom: 4px;
 }
 
@@ -87,7 +87,7 @@
   background: transparent;
   border: 1px solid transparent;
   border-radius: 5px;
-  color: var(--nothing-gray-100, #e0e0e0);
+  color: var(--glyph-fg);
   font-size: 12px;
   cursor: pointer;
   text-align: left;
@@ -95,22 +95,22 @@
 }
 
 .workspace-item-btn:hover {
-  background: rgba(255, 48, 48, 0.12);
-  border-color: rgba(255, 48, 48, 0.35);
-  color: var(--nothing-white, #ffffff);
+  background: var(--glyph-accent-dim);
+  border-color: var(--glyph-accent);
+  color: var(--glyph-fg);
 }
 
 .workspace-item-meta {
   font-size: 10px;
-  color: var(--nothing-gray-500, #737373);
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--glyph-fg-muted);
+  background: var(--glyph-surface);
   padding: 2px 6px;
   border-radius: 3px;
 }
 
 .workspace-dropdown-divider {
   height: 1px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--glyph-line);
   margin: 4px 0;
 }
 
@@ -123,7 +123,7 @@
   background: transparent;
   border: 1px solid transparent;
   border-radius: 5px;
-  color: var(--nothing-gray-100, #e0e0e0);
+  color: var(--glyph-fg);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -131,16 +131,16 @@
 }
 
 .workspace-action-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--nothing-white, #ffffff);
+  background: var(--glyph-accent-dim);
+  color: var(--glyph-fg);
 }
 
 .workspace-action-btn.btn-accent {
-  color: var(--nothing-red-bright, #ff3030);
+  color: var(--glyph-accent);
 }
 
 .workspace-action-btn.btn-accent:hover {
-  background: rgba(255, 48, 48, 0.15);
+  background: var(--glyph-accent-dim);
 }
 
 /* Modals */
@@ -162,10 +162,10 @@
   width: 580px;
   max-width: 95vw;
   max-height: 85vh;
-  background: #0d0d10;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: var(--glyph-surface);
+  border: 1px solid var(--glyph-line-strong);
   border-radius: 10px;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.9);
+  box-shadow: 0 16px 48px var(--glyph-shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -176,22 +176,22 @@
   align-items: center;
   justify-content: space-between;
   padding: 14px 18px;
-  background: linear-gradient(180deg, #18181c 0%, #0d0d10 100%);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(180deg, var(--glyph-surface-raised) 0%, var(--glyph-surface) 100%);
+  border-bottom: 1px solid var(--glyph-line);
 }
 
 .workspace-modal-title {
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: var(--nothing-white, #ffffff);
+  color: var(--glyph-fg);
   text-transform: uppercase;
 }
 
 .workspace-modal-close {
   background: transparent;
   border: none;
-  color: var(--nothing-gray-500, #737373);
+  color: var(--glyph-fg-muted);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -202,8 +202,8 @@
 }
 
 .workspace-modal-close:hover {
-  color: var(--nothing-white, #ffffff);
-  background: rgba(255, 255, 255, 0.1);
+  color: var(--glyph-fg);
+  background: var(--glyph-accent-dim);
 }
 
 .workspace-modal-body {
@@ -220,8 +220,8 @@
   justify-content: flex-end;
   gap: 10px;
   padding: 14px 18px;
-  background: #08080a;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--glyph-surface);
+  border-top: 1px solid var(--glyph-line);
 }
 
 .form-group {
@@ -234,7 +234,7 @@
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.5px;
-  color: var(--nothing-gray-300, #a3a3a3);
+  color: var(--glyph-fg-muted);
   text-transform: uppercase;
 }
 
@@ -242,18 +242,18 @@
   width: 100%;
   height: 34px;
   padding: 0 10px;
-  background: rgba(0, 0, 0, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line);
   border-radius: 5px;
-  color: var(--nothing-white, #ffffff);
+  color: var(--glyph-fg);
   font-size: 13px;
   outline: none;
   transition: border-color 0.15s ease;
 }
 
 .form-input:focus {
-  border-color: var(--nothing-red-bright, #ff3030);
-  box-shadow: 0 0 8px rgba(255, 48, 48, 0.25);
+  border-color: var(--glyph-accent);
+  box-shadow: 0 0 8px var(--glyph-accent-dim);
 }
 
 .preset-grid {
@@ -267,8 +267,8 @@
   flex-direction: column;
   gap: 6px;
   padding: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line);
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -276,19 +276,19 @@
 
 .preset-card:hover,
 .preset-card.is-selected {
-  background: rgba(255, 48, 48, 0.1);
-  border-color: var(--nothing-red-bright, #ff3030);
+  background: var(--glyph-accent-dim);
+  border-color: var(--glyph-accent);
 }
 
 .preset-card-title {
   font-size: 12px;
   font-weight: 600;
-  color: var(--nothing-white, #ffffff);
+  color: var(--glyph-fg);
 }
 
 .preset-card-desc {
   font-size: 11px;
-  color: var(--nothing-gray-500, #737373);
+  color: var(--glyph-fg-muted);
 }
 
 .btn-glyph {
@@ -307,26 +307,26 @@
 }
 
 .btn-glyph-primary {
-  background: var(--nothing-red-bright, #ff3030);
-  border: 1px solid var(--nothing-red-bright, #ff3030);
+  background: var(--glyph-accent);
+  border: 1px solid var(--glyph-accent);
   color: #ffffff;
-  box-shadow: 0 2px 8px rgba(255, 48, 48, 0.35);
+  box-shadow: 0 2px 8px var(--glyph-accent-glow);
 }
 
 .btn-glyph-primary:hover {
-  background: #ff4545;
-  box-shadow: 0 4px 12px rgba(255, 48, 48, 0.5);
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px var(--glyph-accent-glow);
 }
 
 .btn-glyph-secondary {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: var(--nothing-gray-100, #e0e0e0);
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line);
+  color: var(--glyph-fg);
 }
 
 .btn-glyph-secondary:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--nothing-white, #ffffff);
+  background: var(--glyph-accent-dim);
+  color: var(--glyph-fg);
 }
 
 .btn-glyph-danger {
@@ -351,8 +351,8 @@
   flex-direction: column;
   gap: 8px;
   padding: 12px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line);
   border-radius: 6px;
 }
 

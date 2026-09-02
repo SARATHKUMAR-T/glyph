@@ -15,6 +15,9 @@ import { WorkspaceManagerModal } from "../components/workspace/WorkspaceManagerM
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useTerminalBlocks } from "../hooks/useTerminalBlocks";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { useSettingsAutoDismiss } from "../hooks/useSettingsAutoDismiss";
+import { useTerminalTheme } from "../hooks/useTerminalTheme";
+import { getTheme } from "../lib/terminal/themes";
 import { useKeybindings } from "../hooks/useKeybindings";
 import { useWorkspaces } from "../hooks/useWorkspaces";
 import { isTauriRuntime } from "../lib/terminal/events";
@@ -61,8 +64,10 @@ export function App() {
   const [activeTabId, setActiveTabId] = useState(() => tabs[0].clientId);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  useSettingsAutoDismiss(settingsOpen, () => setSettingsOpen(false));
   const { blocksByTab, clearBlocks, ingestSemanticEvent } = useTerminalBlocks();
   const { settings, updateSettings } = useTerminalSettings();
+  const xtermTheme = useTerminalTheme(settings.themeId);
   const { keybindings, updateKeybinding, resetKeybindings } = useKeybindings();
   const { workspaces, saveWorkspace, deleteWorkspace } = useWorkspaces();
 
@@ -376,16 +381,26 @@ export function App() {
     onSplitHorizontal: () => void splitActiveTerminal("horizontal"),
     onNextTab: handleNextTab,
     onPrevTab: handlePrevTab,
-    onSearch: () => setSearchOpen(true),
+    onSearch: () => {
+      setSearchOpen(true);
+      setSettingsOpen(false);
+    },
     onToggleSettings: () => setSettingsOpen((open) => !open),
-    onOpenWorkspace: () => setManageWorkspacesOpen(true),
-    onSaveWorkspace: () => setSaveCurrentWorkspaceOpen(true),
+    onOpenWorkspace: () => {
+      setManageWorkspacesOpen(true);
+      setSettingsOpen(false);
+    },
+    onSaveWorkspace: () => {
+      setSaveCurrentWorkspaceOpen(true);
+      setSettingsOpen(false);
+    },
   });
 
   return (
     <div className="app-shell">
       <WindowResizeHandles />
       <MatrixDotBackground
+        enabled={getTheme(settings.themeId).category !== "light"}
         style={settings.matrixStyle}
         speed={settings.matrixSpeed}
         interactive={settings.interactiveGlow}
@@ -394,14 +409,26 @@ export function App() {
       />
       <TitleBar
         onNewWindow={openNewWindow}
-        onSearch={() => setSearchOpen(true)}
+        onSearch={() => {
+          setSearchOpen(true);
+          setSettingsOpen(false);
+        }}
         onToggleSettings={() => setSettingsOpen((open) => !open)}
         showPerformanceBar={settings.showPerformanceBar}
         workspaces={workspaces}
         onOpenWorkspace={handleOpenWorkspace}
-        onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
-        onSaveCurrentWorkspace={() => setSaveCurrentWorkspaceOpen(true)}
-        onManageWorkspaces={() => setManageWorkspacesOpen(true)}
+        onCreateWorkspace={() => {
+          setCreateWorkspaceOpen(true);
+          setSettingsOpen(false);
+        }}
+        onSaveCurrentWorkspace={() => {
+          setSaveCurrentWorkspaceOpen(true);
+          setSettingsOpen(false);
+        }}
+        onManageWorkspaces={() => {
+          setManageWorkspacesOpen(true);
+          setSettingsOpen(false);
+        }}
       />
       <main className="workspace">
         <TerminalTabs
@@ -410,9 +437,13 @@ export function App() {
           onActivate={(clientId) => {
             setActiveTabId(clientId);
             setSearchOpen(false);
+            setSettingsOpen(false);
           }}
           onClose={closeTab}
-          onNewTerminal={addTerminal}
+          onNewTerminal={() => {
+            addTerminal();
+            setSettingsOpen(false);
+          }}
         />
         <section className="terminal-stage" aria-label="Terminal sessions">
           {tabs.map((tab) => {
@@ -444,6 +475,7 @@ export function App() {
                   paneCount={panes.length}
                   searchOpen={searchOpen && isTabActive}
                   settings={settings}
+                  xtermTheme={xtermTheme}
                   tabId={tab.clientId}
                   onActivatePane={(paneId) => handleActivatePane(tab.clientId, paneId)}
                   onClosePane={(paneId) => closePane(tab.clientId, paneId)}
@@ -469,6 +501,7 @@ export function App() {
         </section>
         <Settings
           open={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
           settings={settings}
           keybindings={keybindings}
           onUpdateSettings={updateSettings}

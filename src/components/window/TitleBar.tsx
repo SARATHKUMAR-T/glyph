@@ -80,6 +80,7 @@ export function TitleBar({
         <button
           aria-label="Settings (Ctrl+,)"
           className="title-action"
+          data-settings-toggle="true"
           title="Settings (Ctrl+,)"
           type="button"
           onClick={onToggleSettings}

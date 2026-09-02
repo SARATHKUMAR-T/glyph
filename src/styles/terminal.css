@@ -8,7 +8,7 @@
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--glyph-line);
   border-radius: 6px;
   overflow: hidden;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -19,12 +19,14 @@
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 4px 16px var(--glyph-shadow);
 }
 
 .terminal-view.is-active-pane {
-  border-color: rgba(255, 48, 48, 0.65);
-  box-shadow: 0 0 14px rgba(255, 48, 48, 0.25), inset 0 0 8px rgba(255, 48, 48, 0.06);
+  border-color: var(--glyph-accent-glow);
+  box-shadow:
+    0 0 14px var(--glyph-accent-dim),
+    inset 0 0 8px color-mix(in srgb, var(--glyph-accent) 6%, transparent);
 }
 
 .pane-header-bar {
@@ -33,8 +35,8 @@
   justify-content: space-between;
   height: 26px;
   padding: 0 8px 0 10px;
-  background: rgba(10, 10, 14, 0.7);
-  border-bottom: 1px solid var(--nothing-line);
+  background: color-mix(in srgb, var(--glyph-surface) 70%, transparent);
+  border-bottom: 1px solid var(--glyph-line);
   user-select: none;
   flex-shrink: 0;
   backdrop-filter: blur(8px);
@@ -50,16 +52,16 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--nothing-gray-500);
+  background: var(--glyph-fg-muted);
 }
 
 .pane-status-running {
-  background: var(--nothing-red-bright);
-  box-shadow: 0 0 6px rgba(255, 48, 48, 0.8);
+  background: var(--glyph-accent);
+  box-shadow: 0 0 6px var(--glyph-accent-glow);
 }
 
 .pane-status-error {
-  background: var(--nothing-red);
+  background: #d71921;
 }
 
 .pane-header-controls {
@@ -74,10 +76,10 @@
   justify-content: center;
   width: 22px;
   height: 20px;
-  border: 1px solid var(--nothing-line);
+  border: 1px solid var(--glyph-line);
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.03);
-  color: var(--nothing-gray-300);
+  color: var(--glyph-fg-muted);
   cursor: pointer;
   padding: 0;
   transition: all 120ms ease;
@@ -88,17 +90,17 @@
 }
 
 .pane-control-btn:hover {
-  border-color: var(--nothing-red-bright);
-  background: rgba(255, 48, 48, 0.18);
-  color: var(--nothing-white);
-  box-shadow: 0 0 8px rgba(255, 48, 48, 0.3);
+  border-color: var(--glyph-accent);
+  background: var(--glyph-accent-dim);
+  color: var(--glyph-fg);
+  box-shadow: 0 0 8px var(--glyph-accent-dim);
 }
 
 .pane-control-close:hover {
-  border-color: var(--nothing-red-bright);
-  background: rgba(255, 48, 48, 0.3);
-  color: var(--nothing-white);
-  box-shadow: 0 0 10px rgba(255, 48, 48, 0.5);
+  border-color: var(--glyph-accent);
+  background: color-mix(in srgb, var(--glyph-accent) 30%, transparent);
+  color: var(--glyph-fg);
+  box-shadow: 0 0 10px var(--glyph-accent-glow);
 }
 
 .pane-actions {
@@ -289,42 +291,39 @@
   width: calc(100% + 12px) !important;
   background-color: transparent !important;
   scrollbar-width: thin !important;
-  scrollbar-color: rgba(255, 48, 48, 0.45) rgba(0, 0, 0, 0.15) !important;
+  scrollbar-color: var(--glyph-accent-glow) rgba(0, 0, 0, 0.15) !important;
 }
 
-/* Thin 5px Red Glow Scrollbar Aligned at Right Edge */
+/* Thin scrollbar — track */
 .xterm .xterm-viewport::-webkit-scrollbar,
-.xterm-viewport::-webkit-scrollbar,
-::-webkit-scrollbar {
+.xterm-viewport::-webkit-scrollbar {
   width: 5px !important;
   height: 5px !important;
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar-track,
-.xterm-viewport::-webkit-scrollbar-track,
-::-webkit-scrollbar-track {
+.xterm-viewport::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.15) !important;
 }
 
+/* Thumb uses theme accent */
 .xterm .xterm-viewport::-webkit-scrollbar-thumb,
-.xterm-viewport::-webkit-scrollbar-thumb,
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 48, 48, 0.45) !important;
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--glyph-accent-glow) !important;
   border-radius: 3px !important;
   transition: background 140ms ease !important;
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover,
-.xterm-viewport::-webkit-scrollbar-thumb:hover,
-::-webkit-scrollbar-thumb:hover {
-  background: var(--nothing-red-bright) !important;
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--glyph-accent) !important;
 }
 
 .xterm .xterm-screen {
   letter-spacing: 0;
 }
 
-/* Unique Glyph Glowing Red Cursor Styling */
+/* Unique Glyph Glowing Cursor Styling */
 .xterm .xterm-cursor-layer {
   z-index: 10 !important;
 }
@@ -338,31 +337,31 @@
 }
 
 .xterm .xterm-cursor-block {
-  background-color: #ff3030 !important;
-  color: #000000 !important;
+  background-color: var(--glyph-accent) !important;
+  color: var(--glyph-bg) !important;
   outline: none !important;
   border: none !important;
   box-shadow: none !important;
-  filter: drop-shadow(0 0 5px rgba(255, 48, 48, 0.85)) !important;
+  filter: drop-shadow(0 0 5px var(--glyph-accent-glow)) !important;
   border-radius: 1px !important;
 }
 
 .xterm .xterm-cursor-bar {
-  background-color: #ff3030 !important;
+  background-color: var(--glyph-accent) !important;
   width: 3.5px !important;
   outline: none !important;
   border: none !important;
   box-shadow: none !important;
-  filter: drop-shadow(0 0 4px rgba(255, 48, 48, 0.9)) !important;
+  filter: drop-shadow(0 0 4px var(--glyph-accent-glow)) !important;
 }
 
 .xterm .xterm-cursor-underline {
   background-color: transparent !important;
   outline: none !important;
   border: none !important;
-  border-bottom: 3.5px solid #ff3030 !important;
+  border-bottom: 3.5px solid var(--glyph-accent) !important;
   box-shadow: none !important;
-  filter: drop-shadow(0 2px 4px rgba(255, 48, 48, 0.9)) !important;
+  filter: drop-shadow(0 2px 4px var(--glyph-accent-glow)) !important;
 }
 
 @keyframes glyph-cursor-blink {
