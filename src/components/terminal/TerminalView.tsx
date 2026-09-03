@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
 import { WebLinksAddon } from "@xterm/addon-web-links";
-import type { IDisposable, Terminal as XTerm } from "@xterm/xterm";
+import type { IDisposable, ITheme, Terminal as XTerm } from "@xterm/xterm";
 import { readText as clipboardReadText } from "@tauri-apps/plugin-clipboard-manager";
 
 import { createNothingXterm } from "../../lib/terminal/xterm";
@@ -28,24 +28,30 @@ import type {
 } from "../../lib/terminal/types";
 import { matchesKeyCombo, type KeybindingsConfig } from "../../hooks/useKeybindings";
 import type { TerminalSettings } from "../../hooks/useTerminalSettings";
-
 import { TerminalBlock } from "./TerminalBlock";
+
+const pendingOutputMap = new Map<string, string[]>();
 
 type TerminalViewProps = {
   active: boolean;
   isPaneActive: boolean;
   isSplit?: boolean;
+  /** True when this pane is currently shown enlarged in the expanded-pane modal. */
+  isExpanded?: boolean;
   pane: TerminalPaneModel;
   tabId: string;
   blocks: TerminalBlockModel[];
   keybindings: KeybindingsConfig;
   searchOpen: boolean;
   settings?: TerminalSettings;
+  /** Active xterm palette from useTerminalTheme — applied at creation and live on change */
+  xtermTheme?: ITheme;
   canClosePane?: boolean;
   onActivatePane: (paneId: string) => void;
   onCloseSearch: () => void;
   onCloseTerminal?: () => void;
   onClosePane?: (paneId: string) => void;
+  onExpandPane?: (paneId: string) => void;
   onSplitVertical?: (paneId: string) => void;
   onSplitHorizontal?: (paneId: string) => void;
   onNewTerminal?: () => void;
@@ -58,8 +64,10 @@ type TerminalViewProps = {
   onSessionResize: (paneId: string, cols: number, rows: number) => void;
   onSessionStatus: (paneId: string, status: TerminalStatus, error?: string) => void;
   onTitleChange?: (paneId: string, title: string) => void;
+  isWindowMaximized?: boolean;
   onToggleSettings?: () => void;
 };
+
 
 function formatError(error: unknown): string {
   if (error instanceof Error) {
@@ -74,11 +82,14 @@ export function TerminalView({
   canClosePane = false,
   isPaneActive,
   isSplit = false,
+  isExpanded = false,
+  isWindowMaximized = false,
   keybindings,
   onActivatePane,
   onClosePane,
   onCloseSearch,
   onCloseTerminal,
+  onExpandPane,
   onNewTerminal,
   onNewWindow,
   onNextTab,
@@ -95,6 +106,7 @@ export function TerminalView({
   pane,
   searchOpen,
   settings,
+  xtermTheme,
   tabId,
 }: TerminalViewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -130,6 +142,7 @@ export function TerminalView({
     onPrevTab,
     onCloseTerminal,
     onClosePane,
+    onExpandPane,
     onSplitVertical,
     onSplitHorizontal,
     onNewTerminal,
@@ -149,6 +162,7 @@ export function TerminalView({
       onPrevTab,
       onCloseTerminal,
       onClosePane,
+      onExpandPane,
       onSplitVertical,
       onSplitHorizontal,
       onNewTerminal,
@@ -180,20 +194,46 @@ export function TerminalView({
   const fitAndResize = useCallback(() => {
     const terminal = terminalRef.current;
     const fitAddon = fitAddonRef.current;
-    if (!terminal || !fitAddon) {
+    const host = hostRef.current;
+    if (!terminal || !fitAddon || !host) {
+      return;
+    }
+
+    if (host.clientWidth === 0 || host.clientHeight === 0) {
       return;
     }
 
     try {
       const dims = fitAddon.proposeDimensions();
-      if (dims && dims.cols > 10) {
-        terminal.resize(dims.cols - 2, dims.rows);
+      if (dims && dims.cols > 0 && dims.rows > 0) {
+        let targetRows = dims.rows;
+
+        const renderService = (
+          terminal as unknown as {
+            _core?: { _renderService?: { dimensions?: { css?: { cell?: { height: number } } } } };
+          }
+        )._core?._renderService;
+        const cellHeight = renderService?.dimensions?.css?.cell?.height;
+
+        if (cellHeight && cellHeight > 0) {
+          const style = window.getComputedStyle(host);
+          const paddingTop = parseFloat(style.paddingTop) || 0;
+          const paddingBottom = parseFloat(style.paddingBottom) || 0;
+          const availableHeight = host.clientHeight - paddingTop - paddingBottom;
+          const maxRows = Math.floor(availableHeight / cellHeight);
+
+          if (maxRows > 0 && targetRows > maxRows) {
+            targetRows = maxRows;
+          }
+        }
+
+        terminal.resize(dims.cols, targetRows);
       } else {
         fitAddon.fit();
       }
       restoreScrollPosition();
-    } catch (error) {
-      propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error));
+      terminal.refresh(0, Math.max(0, terminal.rows - 1));
+    } catch {
       return;
     }
 
@@ -229,6 +269,7 @@ export function TerminalView({
       cursorStyle: settings?.cursorStyle,
       cursorBlink: settings?.cursorBlink,
       fontSize: settings?.fontSize,
+      xtermTheme,
     });
     const fitAddon = new FitAddon();
     const searchAddon = new SearchAddon();
@@ -327,7 +368,10 @@ export function TerminalView({
           if (!text) return;
           const sessionId = sessionIdRef.current;
           if (sessionId && isTauriRuntime()) {
-            void writeTerminalData(sessionId, text);
+            // Use xterm's paste() so bracketed paste mode (\x1b[200~...\x1b[201~) is
+            // automatically applied when the active program (e.g. nano) has enabled it.
+            // This preserves newlines and document structure in full-screen editors.
+            terminalRef.current?.paste(text);
           } else if (mockSessionRef.current) {
             mockSessionRef.current.handleData(text);
           }
@@ -447,24 +491,26 @@ export function TerminalView({
       try {
         propsRef.current.onSessionStatus(pane.paneId, "starting");
 
-        const pendingOutputBySession = new Map<string, string[]>();
         let assignedId: string | null = pane.sessionId ?? null;
+        if (pane.sessionId) {
+          sessionIdRef.current = pane.sessionId;
+        }
 
         const dataUnlisten = await listenTerminalOutput((evt) => {
-          if (assignedId) {
-            if (evt.sessionId === assignedId) {
-              terminal.write(evt.data);
-            }
+          const currentId = sessionIdRef.current;
+          if (currentId && evt.sessionId === currentId) {
+            terminal.write(evt.data);
           } else {
-            const list = pendingOutputBySession.get(evt.sessionId) ?? [];
+            const list = pendingOutputMap.get(evt.sessionId) ?? [];
             list.push(evt.data);
-            pendingOutputBySession.set(evt.sessionId, list);
+            pendingOutputMap.set(evt.sessionId, list);
           }
         });
         unlisteners.push(dataUnlisten);
 
         const eventUnlisten = await listenTerminalSemantic((evt) => {
-          if (assignedId && evt.sessionId === assignedId) {
+          const currentId = sessionIdRef.current;
+          if (currentId && evt.sessionId === currentId) {
             propsRef.current.onSemanticEvent(pane.paneId, evt);
           }
         });
@@ -484,6 +530,7 @@ export function TerminalView({
             };
           }),
           terminal.onData((data) => {
+            window.dispatchEvent(new CustomEvent("glyph:terminal-activity"));
             if (!sessionIdRef.current) return;
             const sid = sessionIdRef.current;
 
@@ -545,10 +592,6 @@ export function TerminalView({
           assignedId = pane.sessionId;
           sessionIdRef.current = pane.sessionId;
           propsRef.current.onSessionStatus(pane.paneId, "running");
-          fitAndResize();
-          if (isPaneActive) {
-            terminal.focus();
-          }
         } else {
           propsRef.current.onSessionStatus(pane.paneId, "starting");
 
@@ -567,21 +610,42 @@ export function TerminalView({
           sessionIdRef.current = info.sessionId;
           lastResizedSessionIdRef.current = info.sessionId;
           propsRef.current.onSessionReady(pane.paneId, info);
-          fitAndResize();
-          if (isPaneActive) {
-            terminal.focus();
-          }
         }
 
         if (assignedId) {
-          const sessionPending = pendingOutputBySession.get(assignedId);
+          const sessionPending = pendingOutputMap.get(assignedId);
           if (sessionPending && sessionPending.length > 0) {
             for (const chunk of sessionPending) {
               terminal.write(chunk);
             }
+            pendingOutputMap.delete(assignedId);
+          }
+
+          if (pane.startupCommand) {
+            let cmdStr = "";
+            if (typeof pane.startupCommand === "string") {
+              cmdStr = pane.startupCommand.trim();
+            } else if (pane.startupCommand.program) {
+              cmdStr = `${pane.startupCommand.program} ${pane.startupCommand.args.join(" ")}`.trim();
+            }
+
+            if (cmdStr) {
+              const sid = assignedId;
+              setTimeout(() => {
+                void writeTerminalData(sid, `${cmdStr}\r`).catch((err) => {
+                  console.error("[TerminalView] Startup command failed:", err);
+                });
+              }, 300);
+            }
           }
         }
-        pendingOutputBySession.clear();
+
+        fitAndResize();
+        if (isPaneActive) {
+          terminal.focus();
+        } else {
+          terminal.blur();
+        }
 
 
 
@@ -622,6 +686,14 @@ export function TerminalView({
     };
   }, [fitAndResize, pane.paneId]);
 
+  // Live-update the xterm palette when the theme changes, without restarting.
+  useEffect(() => {
+    const terminal = terminalRef.current;
+    if (!terminal || !xtermTheme) return;
+    terminal.options.theme = xtermTheme;
+    terminal.refresh(0, Math.max(0, terminal.rows - 1));
+  }, [xtermTheme]);
+
   useEffect(() => {
     if (!active && terminalRef.current) {
       const terminal = terminalRef.current;
@@ -649,6 +721,8 @@ export function TerminalView({
         terminalRef.current?.focus();
       }, 25);
       return () => clearTimeout(timer);
+    } else {
+      terminalRef.current?.blur();
     }
   }, [active, isPaneActive, fitAndResize]);
 
@@ -656,13 +730,13 @@ export function TerminalView({
     const terminal = terminalRef.current;
     if (terminal && settings) {
       terminal.options.cursorStyle = settings.cursorStyle;
-      terminal.options.cursorBlink = settings.cursorBlink;
+      terminal.options.cursorBlink = active && isPaneActive ? (settings.cursorBlink ?? true) : false;
       if (settings.fontSize && terminal.options.fontSize !== settings.fontSize) {
         terminal.options.fontSize = settings.fontSize;
         fitAndResize();
       }
     }
-  }, [fitAndResize, settings?.cursorBlink, settings?.cursorStyle, settings?.fontSize]);
+  }, [active, isPaneActive, fitAndResize, settings?.cursorBlink, settings?.cursorStyle, settings?.fontSize]);
 
   useEffect(() => {
     if (searchOpen && isPaneActive) {
@@ -706,8 +780,12 @@ export function TerminalView({
     terminalRef.current?.focus();
   };
 
-  const showPaneGlow = isSplit && isPaneActive;
-  const activeClass = active && showPaneGlow ? "terminal-view is-active is-active-pane" : active ? "terminal-view is-active" : "terminal-view";
+  const activeClass =
+    active && isPaneActive
+      ? "terminal-view is-active is-active-pane"
+      : active
+        ? "terminal-view is-active"
+        : "terminal-view";
 
   return (
     <div
@@ -719,51 +797,76 @@ export function TerminalView({
       <div className="pane-header-bar">
         <div className="pane-header-left">
           <span className={`pane-status-dot pane-status-${pane.status}`} aria-hidden="true" />
+          {pane.title && (
+            <span style={{ fontSize: "11px", fontWeight: 600, letterSpacing: "0.5px", color: "var(--nothing-gray-100)", textTransform: "uppercase" }}>
+              {pane.title}
+            </span>
+          )}
         </div>
         <div className="pane-header-controls">
-          <button
-            type="button"
-            className="pane-control-btn"
-            title="Split Right (Ctrl+Shift+D)"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSplitVertical?.(pane.paneId);
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2.5" />
-              <line x1="12" y1="3" x2="12" y2="21" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="pane-control-btn"
-            title="Split Down (Ctrl+Shift+O)"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSplitHorizontal?.(pane.paneId);
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2.5" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-            </svg>
-          </button>
-          {canClosePane && (
+          {isSplit && !isExpanded && isWindowMaximized && (
             <button
               type="button"
-              className="pane-control-btn pane-control-close"
-              title="Close Pane (Ctrl+Shift+W)"
+              className="pane-control-btn"
+              title="Expand Pane (Full Window)"
               onClick={(e) => {
                 e.stopPropagation();
-                onClosePane?.(pane.paneId);
+                onExpandPane?.(pane.paneId);
               }}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
               </svg>
             </button>
+          )}
+          {!isExpanded && (
+            <>
+              <button
+                type="button"
+                className="pane-control-btn"
+                title="Split Right (Ctrl+Shift+D)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSplitVertical?.(pane.paneId);
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2.5" />
+                  <line x1="12" y1="3" x2="12" y2="21" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="pane-control-btn"
+                title="Split Down (Ctrl+Shift+O)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSplitHorizontal?.(pane.paneId);
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2.5" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                </svg>
+              </button>
+              {canClosePane && (
+                <button
+                  type="button"
+                  className="pane-control-btn pane-control-close"
+                  title="Close Pane (Ctrl+Shift+W)"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClosePane?.(pane.paneId);
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

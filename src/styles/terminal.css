@@ -1,7 +1,6 @@
 .terminal-view {
   position: relative;
-  width: 100%;
-  height: 100%;
+  flex: 1 1 0;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -9,7 +8,9 @@
   opacity: 0;
   pointer-events: none;
   visibility: hidden;
-  border: 1px solid transparent;
+  border: 1px solid var(--glyph-line);
+  border-radius: 6px;
+  overflow: hidden;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   box-sizing: border-box;
 }
@@ -18,11 +19,14 @@
   opacity: 1;
   pointer-events: auto;
   visibility: visible;
+  box-shadow: 0 4px 16px var(--glyph-shadow);
 }
 
 .terminal-view.is-active-pane {
-  border-color: rgba(255, 48, 48, 0.45);
-  box-shadow: inset 0 0 10px rgba(255, 48, 48, 0.1);
+  border-color: var(--glyph-accent-glow);
+  box-shadow:
+    0 0 14px var(--glyph-accent-dim),
+    inset 0 0 8px color-mix(in srgb, var(--glyph-accent) 6%, transparent);
 }
 
 .pane-header-bar {
@@ -31,8 +35,8 @@
   justify-content: space-between;
   height: 26px;
   padding: 0 8px 0 10px;
-  background: rgba(10, 10, 14, 0.7);
-  border-bottom: 1px solid var(--nothing-line);
+  background: color-mix(in srgb, var(--glyph-surface) 70%, transparent);
+  border-bottom: 1px solid var(--glyph-line);
   user-select: none;
   flex-shrink: 0;
   backdrop-filter: blur(8px);
@@ -48,16 +52,16 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--nothing-gray-500);
+  background: var(--glyph-fg-muted);
 }
 
 .pane-status-running {
-  background: var(--nothing-red-bright);
-  box-shadow: 0 0 6px rgba(255, 48, 48, 0.8);
+  background: var(--glyph-accent);
+  box-shadow: 0 0 6px var(--glyph-accent-glow);
 }
 
 .pane-status-error {
-  background: var(--nothing-red);
+  background: #d71921;
 }
 
 .pane-header-controls {
@@ -72,10 +76,10 @@
   justify-content: center;
   width: 22px;
   height: 20px;
-  border: 1px solid var(--nothing-line);
+  border: 1px solid var(--glyph-line);
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.03);
-  color: var(--nothing-gray-300);
+  color: var(--glyph-fg-muted);
   cursor: pointer;
   padding: 0;
   transition: all 120ms ease;
@@ -86,17 +90,17 @@
 }
 
 .pane-control-btn:hover {
-  border-color: var(--nothing-red-bright);
-  background: rgba(255, 48, 48, 0.18);
-  color: var(--nothing-white);
-  box-shadow: 0 0 8px rgba(255, 48, 48, 0.3);
+  border-color: var(--glyph-accent);
+  background: var(--glyph-accent-dim);
+  color: var(--glyph-fg);
+  box-shadow: 0 0 8px var(--glyph-accent-dim);
 }
 
 .pane-control-close:hover {
-  border-color: var(--nothing-red-bright);
-  background: rgba(255, 48, 48, 0.3);
-  color: var(--nothing-white);
-  box-shadow: 0 0 10px rgba(255, 48, 48, 0.5);
+  border-color: var(--glyph-accent);
+  background: color-mix(in srgb, var(--glyph-accent) 30%, transparent);
+  color: var(--glyph-fg);
+  box-shadow: 0 0 10px var(--glyph-accent-glow);
 }
 
 .pane-actions {
@@ -135,6 +139,8 @@
 
 /* Split Tree Containers & Resizers */
 .split-container {
+  display: flex;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
@@ -148,6 +154,26 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  padding: 3px;
+  box-sizing: border-box;
+}
+
+.pane-portal-target {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pane-portal-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .split-resizer {
@@ -191,9 +217,10 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  height: 100%;
+  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
   background: transparent;
 }
 
@@ -240,54 +267,63 @@
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
-  padding: 10px 0 10px 14px !important;
+  /* 12px right padding: fit-addon uses this as available width so the
+     canvas columns are calculated to stop well before the scrollbar */
+  padding: 6px 12px 6px 12px !important;
   overflow: hidden;
   background: transparent !important;
 }
 
 .xterm {
-  padding: 0 !important;
   background-color: transparent !important;
+}
+
+.xterm-screen {
+  margin-right: 0 !important;
 }
 
 .xterm-viewport {
+  /* Extend the viewport (and therefore the scrollbar) rightward to cover
+     the 12px padding on .xterm-host, so the scrollbar sits at the true
+     right edge with no gap visible next to it.
+     The canvas is still bounded by the columns calculated from the
+     padded width, so text never renders under the scrollbar. */
+  width: calc(100% + 12px) !important;
   background-color: transparent !important;
-  scrollbar-width: none !important;
+  scrollbar-width: thin !important;
+  scrollbar-color: var(--glyph-accent-glow) rgba(0, 0, 0, 0.15) !important;
 }
 
-/* Thin 5px Red Glow Scrollbar Aligned at Right Edge */
+/* Thin scrollbar — track */
 .xterm .xterm-viewport::-webkit-scrollbar,
-.xterm-viewport::-webkit-scrollbar,
-::-webkit-scrollbar {
+.xterm-viewport::-webkit-scrollbar {
   width: 5px !important;
   height: 5px !important;
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar-track,
-.xterm-viewport::-webkit-scrollbar-track,
-::-webkit-scrollbar-track {
+.xterm-viewport::-webkit-scrollbar-track {
   background: rgba(0, 0, 0, 0.15) !important;
 }
 
+/* Thumb uses theme accent */
 .xterm .xterm-viewport::-webkit-scrollbar-thumb,
-.xterm-viewport::-webkit-scrollbar-thumb,
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 48, 48, 0.45) !important;
+.xterm-viewport::-webkit-scrollbar-thumb {
+  background: var(--glyph-accent-glow) !important;
   border-radius: 3px !important;
   transition: background 140ms ease !important;
 }
 
 .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover,
-.xterm-viewport::-webkit-scrollbar-thumb:hover,
-::-webkit-scrollbar-thumb:hover {
-  background: var(--nothing-red-bright) !important;
+.xterm-viewport::-webkit-scrollbar-thumb:hover {
+  background: var(--glyph-accent) !important;
 }
 
 .xterm .xterm-screen {
   letter-spacing: 0;
 }
 
-/* Unique Glyph Glowing Red Cursor Styling */
+/* Unique Glyph Glowing Cursor Styling */
 .xterm .xterm-cursor-layer {
   z-index: 10 !important;
 }
@@ -301,31 +337,31 @@
 }
 
 .xterm .xterm-cursor-block {
-  background-color: #ff3030 !important;
-  color: #000000 !important;
+  background-color: var(--glyph-accent) !important;
+  color: var(--glyph-bg) !important;
   outline: none !important;
   border: none !important;
   box-shadow: none !important;
-  filter: drop-shadow(0 0 5px rgba(255, 48, 48, 0.85)) !important;
+  filter: drop-shadow(0 0 5px var(--glyph-accent-glow)) !important;
   border-radius: 1px !important;
 }
 
 .xterm .xterm-cursor-bar {
-  background-color: #ff3030 !important;
+  background-color: var(--glyph-accent) !important;
   width: 3.5px !important;
   outline: none !important;
   border: none !important;
   box-shadow: none !important;
-  filter: drop-shadow(0 0 4px rgba(255, 48, 48, 0.9)) !important;
+  filter: drop-shadow(0 0 4px var(--glyph-accent-glow)) !important;
 }
 
 .xterm .xterm-cursor-underline {
   background-color: transparent !important;
   outline: none !important;
   border: none !important;
-  border-bottom: 3.5px solid #ff3030 !important;
+  border-bottom: 3.5px solid var(--glyph-accent) !important;
   box-shadow: none !important;
-  filter: drop-shadow(0 2px 4px rgba(255, 48, 48, 0.9)) !important;
+  filter: drop-shadow(0 2px 4px var(--glyph-accent-glow)) !important;
 }
 
 @keyframes glyph-cursor-blink {
@@ -339,6 +375,15 @@
 
 .xterm .xterm-cursor-blink {
   animation: glyph-cursor-blink 1s ease-in-out infinite !important;
+}
+
+/* Inactive Pane Cursor Styling - Dimmed opacity & non-blinking red cursor */
+.terminal-view:not(.is-active-pane) .xterm .xterm-cursor-layer {
+  opacity: 0.45 !important;
+}
+
+.terminal-view:not(.is-active-pane) .xterm .xterm-cursor-blink {
+  animation: none !important;
 }
 
 .terminal-search {
@@ -392,7 +437,7 @@
   }
 
   .xterm-host {
-    padding: 10px;
+    padding: 6px 0 0 10px;
   }
 }
 
@@ -401,4 +446,169 @@
 .xterm-hover-pattern span {
   cursor: pointer !important;
   text-decoration: underline !important;
+}
+
+/* Expanded (enlarged) Pane View */
+.expanded-pane-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  background: var(--glyph-bg);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  animation: workspace-fade-in 0.15s ease-out;
+}
+
+.expanded-pane-modal {
+  width: 100%;
+  height: 100%;
+  background: var(--glyph-surface);
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.expanded-pane-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: linear-gradient(180deg, var(--glyph-surface-raised) 0%, var(--glyph-surface) 100%);
+  border-bottom: 1px solid var(--glyph-line);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.expanded-pane-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--glyph-fg);
+}
+
+.expanded-pane-title svg {
+  color: var(--glyph-accent);
+}
+
+.expanded-pane-close {
+  background: transparent;
+  border: none;
+  color: var(--glyph-fg-muted);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.expanded-pane-close:hover {
+  color: var(--glyph-fg);
+  background: color-mix(in srgb, var(--glyph-accent) 30%, transparent);
+  box-shadow: 0 0 10px var(--glyph-accent-glow);
+}
+
+.expanded-pane-badge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: var(--glyph-accent-dim);
+  color: var(--glyph-accent);
+  border: 1px solid var(--glyph-accent-glow);
+  margin-left: 6px;
+}
+
+.expanded-pane-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.expanded-pane-btn {
+  background: var(--glyph-surface);
+  border: 1px solid var(--glyph-line);
+  border-radius: 4px;
+  color: var(--glyph-fg-muted);
+  padding: 4px 8px;
+  font-family: var(--nothing-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.12s ease;
+}
+
+.expanded-pane-btn:hover {
+  border-color: var(--glyph-accent);
+  color: var(--glyph-fg);
+  background: var(--glyph-accent-dim);
+}
+
+.expanded-pane-body {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  background: var(--glyph-bg);
+}
+
+.expanded-pane-target {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.expanded-pane-modal .terminal-view {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.expanded-pane-modal .terminal-view .pane-header-bar {
+  display: none;
+}
+
+/* Placeholder in split view while a pane is enlarged in modal */
+.split-pane-expanded-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--glyph-surface) 50%, transparent);
+  border: 1px dashed var(--glyph-line-strong);
+  border-radius: 6px;
+  color: var(--glyph-fg-muted);
+  font-family: var(--nothing-mono);
+  font-size: 11px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  user-select: none;
+  width: 100%;
+  height: 100%;
+}
+
+.expanded-placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  opacity: 0.65;
+}
+
+.expanded-placeholder-content svg {
+  color: var(--glyph-accent);
 }

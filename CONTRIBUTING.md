@@ -387,7 +387,7 @@ When reporting a bug, please include as much relevant information as possible:
 **Example:**
 
 ```
-Glyph version: v0.1.0
+Glyph version: v0.2.0
 OS: Ubuntu 24.04
 Shell: zsh
 ```

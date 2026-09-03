@@ -45,6 +45,7 @@ pub struct TerminalErrorPayload {
     pub message: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum TerminalError {
     #[error("Terminal session not found: {0}")]

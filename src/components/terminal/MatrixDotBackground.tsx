@@ -7,6 +7,7 @@ type MatrixDotBackgroundProps = {
   interactive?: boolean;
   opacity?: number;
   dotColor?: string;
+  enabled?: boolean;
 };
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } {
@@ -29,6 +30,7 @@ export function MatrixDotBackground({
   interactive = true,
   opacity = 0.45,
   dotColor = "#8c8c91",
+  enabled = true,
 }: MatrixDotBackgroundProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const mouseRef = useRef<{ x: number; y: number; active: boolean }>({
@@ -38,6 +40,7 @@ export function MatrixDotBackground({
   });
 
   useEffect(() => {
+    if (!enabled) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -239,7 +242,11 @@ export function MatrixDotBackground({
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseleave", handleMouseLeave);
     };
-  }, [dotColor, interactive, opacity, speed, style]);
+  }, [dotColor, enabled, interactive, opacity, speed, style]);
+
+  if (!enabled) {
+    return null;
+  }
 
   return (
     <canvas

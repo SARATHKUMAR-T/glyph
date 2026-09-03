@@ -18,6 +18,7 @@ export type TerminalPaneModel = {
   status: TerminalStatus;
   error?: string;
   title?: string;
+  startupCommand?: string | { program: string; args: string[] } | null;
 };
 
 export type SplitDirection = "vertical" | "horizontal";

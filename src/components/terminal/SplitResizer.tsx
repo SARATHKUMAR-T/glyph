@@ -13,6 +13,7 @@ export function SplitResizer({ direction, onResize }: SplitResizerProps) {
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    window.dispatchEvent(new CustomEvent("glyph:terminal-activity"));
     setIsDragging(true);
   }, []);
 

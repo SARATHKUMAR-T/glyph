@@ -1,0 +1,363 @@
+/* Workspaces Feature CSS - Glyph Industrial Design System */
+
+.workspace-menu-container {
+  position: relative;
+  display: inline-block;
+}
+
+.workspace-menu-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line);
+  border-radius: 4px;
+  color: var(--glyph-fg);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.workspace-menu-trigger:hover,
+.workspace-menu-trigger.is-open {
+  background: var(--glyph-accent-dim);
+  border-color: var(--glyph-accent);
+  color: var(--glyph-fg);
+}
+
+.workspace-menu-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: auto;
+  width: 280px;
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line-strong);
+  border-radius: 8px;
+  box-shadow: 0 12px 36px var(--glyph-shadow);
+  z-index: 99999;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  animation: workspace-fade-in 0.12s ease-out;
+}
+
+@keyframes workspace-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.workspace-dropdown-header {
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--glyph-fg-muted);
+  border-bottom: 1px solid var(--glyph-line);
+  margin-bottom: 4px;
+}
+
+.workspace-list-container {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.workspace-item-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--glyph-fg);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.12s ease;
+}
+
+.workspace-item-btn:hover {
+  background: var(--glyph-accent-dim);
+  border-color: var(--glyph-accent);
+  color: var(--glyph-fg);
+}
+
+.workspace-item-meta {
+  font-size: 10px;
+  color: var(--glyph-fg-muted);
+  background: var(--glyph-surface);
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.workspace-dropdown-divider {
+  height: 1px;
+  background: var(--glyph-line);
+  margin: 4px 0;
+}
+
+.workspace-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--glyph-fg);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.workspace-action-btn:hover {
+  background: var(--glyph-accent-dim);
+  color: var(--glyph-fg);
+}
+
+.workspace-action-btn.btn-accent {
+  color: var(--glyph-accent);
+}
+
+.workspace-action-btn.btn-accent:hover {
+  background: var(--glyph-accent-dim);
+}
+
+/* Modals */
+
+.workspace-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(6px);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  animation: workspace-fade-in 0.15s ease-out;
+}
+
+.workspace-modal {
+  width: 580px;
+  max-width: 95vw;
+  max-height: 85vh;
+  background: var(--glyph-surface);
+  border: 1px solid var(--glyph-line-strong);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px var(--glyph-shadow);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workspace-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: linear-gradient(180deg, var(--glyph-surface-raised) 0%, var(--glyph-surface) 100%);
+  border-bottom: 1px solid var(--glyph-line);
+}
+
+.workspace-modal-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--glyph-fg);
+  text-transform: uppercase;
+}
+
+.workspace-modal-close {
+  background: transparent;
+  border: none;
+  color: var(--glyph-fg-muted);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s ease;
+}
+
+.workspace-modal-close:hover {
+  color: var(--glyph-fg);
+  background: var(--glyph-accent-dim);
+}
+
+.workspace-modal-body {
+  padding: 18px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.workspace-modal-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 18px;
+  background: var(--glyph-surface);
+  border-top: 1px solid var(--glyph-line);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  color: var(--glyph-fg-muted);
+  text-transform: uppercase;
+}
+
+.form-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line);
+  border-radius: 5px;
+  color: var(--glyph-fg);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.form-input:focus {
+  border-color: var(--glyph-accent);
+  box-shadow: 0 0 8px var(--glyph-accent-dim);
+}
+
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.preset-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.preset-card:hover,
+.preset-card.is-selected {
+  background: var(--glyph-accent-dim);
+  border-color: var(--glyph-accent);
+}
+
+.preset-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--glyph-fg);
+}
+
+.preset-card-desc {
+  font-size: 11px;
+  color: var(--glyph-fg-muted);
+}
+
+.btn-glyph {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.btn-glyph-primary {
+  background: var(--glyph-accent);
+  border: 1px solid var(--glyph-accent);
+  color: #ffffff;
+  box-shadow: 0 2px 8px var(--glyph-accent-glow);
+}
+
+.btn-glyph-primary:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 4px 12px var(--glyph-accent-glow);
+}
+
+.btn-glyph-secondary {
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line);
+  color: var(--glyph-fg);
+}
+
+.btn-glyph-secondary:hover {
+  background: var(--glyph-accent-dim);
+  color: var(--glyph-fg);
+}
+
+.btn-glyph-danger {
+  background: rgba(255, 30, 30, 0.2);
+  border: 1px solid rgba(255, 48, 48, 0.4);
+  color: #ff5555;
+}
+
+.btn-glyph-danger:hover {
+  background: rgba(255, 30, 30, 0.35);
+  color: #ffffff;
+}
+
+.pane-config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.pane-config-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line);
+  border-radius: 6px;
+}
+
+.pane-config-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 10px;
+}

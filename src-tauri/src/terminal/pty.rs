@@ -33,7 +33,7 @@ pub fn spawn_shell(session_id: &str, request: CreateTerminalRequest) -> Result<S
     command.env("LC_ALL", "en_US.UTF-8");
     command.env("LC_CTYPE", "en_US.UTF-8");
     command.env("TERM_PROGRAM", "Glyph");
-    command.env("TERM_PROGRAM_VERSION", "0.1.0");
+    command.env("TERM_PROGRAM_VERSION", env!("CARGO_PKG_VERSION"));
     command.env("GLYPH_TERMINAL", "1");
     command.env("GLYPH_TERMINAL_SESSION", session_id);
 
@@ -81,10 +81,65 @@ pub fn detect_shell() -> String {
         .unwrap_or_else(|| "/bin/bash".to_string())
 }
 
+fn expand_tilde(path_str: &str) -> String {
+    if path_str == "~" || path_str.starts_with("~/") {
+        if let Ok(home) = env::var("HOME") {
+            if path_str == "~" {
+                return home;
+            } else {
+                return format!("{}{}", home, &path_str[1..]);
+            }
+        }
+    }
+    path_str.to_string()
+}
+
 fn validate_cwd(cwd: Option<String>) -> Result<Option<String>, TerminalError> {
-    match cwd {
-        Some(path) if Path::new(&path).is_dir() => Ok(Some(path)),
-        Some(path) => Err(TerminalError::InvalidWorkingDirectory(path)),
-        None => Ok(None),
+    let Some(raw_path) = cwd else {
+        return Ok(None);
+    };
+
+    let trimmed = raw_path.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+
+    let expanded = expand_tilde(trimmed);
+    let path = Path::new(&expanded);
+
+    if path.is_dir() {
+        Ok(Some(expanded))
+    } else {
+        if let Ok(home) = env::var("HOME") {
+            let home_path = Path::new(&home);
+            if home_path.is_dir() {
+                return Ok(Some(home));
+            }
+        }
+        Ok(None)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_expand_tilde() {
+        if let Ok(home) = env::var("HOME") {
+            assert_eq!(expand_tilde("~"), home);
+            assert_eq!(expand_tilde("~/Desktop"), format!("{home}/Desktop"));
+        }
+        assert_eq!(expand_tilde("/var/log"), "/var/log");
+    }
+
+    #[test]
+    fn test_validate_cwd_handles_tilde_and_non_existent() {
+        let result = validate_cwd(Some("~/Desktop".to_string())).unwrap();
+        assert!(result.is_some());
+
+        // Non-existent directory should fall back to HOME cleanly instead of crashing
+        let fallback = validate_cwd(Some("~/non_existent_folder_xyz_123".to_string())).unwrap();
+        assert!(fallback.is_some());
     }
 }
