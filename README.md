@@ -127,7 +127,7 @@ Download the latest release:
 Download the `.deb` package from the release assets and install it with:
 
 ``` bash
-sudo apt install ./Glyph_0.1.0_amd64.deb
+sudo apt install ./Glyph_0.2.0_amd64.deb
 ```
 
 Then launch **Glyph** from your applications menu.
@@ -137,13 +137,13 @@ Then launch **Glyph** from your applications menu.
 Download the AppImage and make it executable:
 
 ``` bash
-chmod +x Glyph_0.1.0_amd64.AppImage
+chmod +x Glyph_0.2.0_amd64.AppImage
 ```
 
 Run it:
 
 ``` bash
-./Glyph_0.1.0_amd64.AppImage
+./Glyph_0.2.0_amd64.AppImage
 ```
 
 ### RPM
@@ -152,13 +152,13 @@ For RPM-based distributions, download the `.rpm` package from the
 release assets.
 
 ``` bash
-sudo rpm -i Glyph-0.1.0-1.x86_64.rpm
+sudo rpm -i Glyph-0.2.0-1.x86_64.rpm
 ```
 
 Or, on distributions using `dnf`:
 
 ``` bash
-sudo dnf install ./Glyph-0.1.0-1.x86_64.rpm
+sudo dnf install ./Glyph-0.2.0-1.x86_64.rpm
 ```
 
 ### Current Platform

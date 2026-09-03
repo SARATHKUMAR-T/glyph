@@ -1,0 +1,21 @@
+[Desktop Entry]
+Categories=System;TerminalEmulator;Development;
+Comment=A modern, customizable terminal for Linux
+Exec=glyph %U
+Icon=glyph
+Name=Glyph
+Terminal=false
+Type=Application
+StartupWMClass=glyph
+MimeType=inode/directory;
+
+Actions=new-window;open-in-glyph;
+
+[Desktop Action new-window]
+Name=New Window
+Exec=glyph
+
+[Desktop Action open-in-glyph]
+Name=Open in Glyph
+Exec=glyph %f
+

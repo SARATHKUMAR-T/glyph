@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+# Resolve target directory from Nautilus environment variables
+if [ -n "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS" ]; then
+    TARGET="$(echo "$NAUTILUS_SCRIPT_SELECTED_FILE_PATHS" | head -n 1)"
+    if [ ! -d "$TARGET" ]; then
+        TARGET="$(dirname "$TARGET")"
+    fi
+elif [ -n "$NAUTILUS_SCRIPT_CURRENT_URI" ]; then
+    # Nautilus URI format: file:///path/to/dir
+    TARGET="${NAUTILUS_SCRIPT_CURRENT_URI#file://}"
+    TARGET="$(printf '%b' "${TARGET//%/\\x}")"
+else
+    TARGET="$PWD"
+fi
+
+if [ -z "$TARGET" ] || [ ! -d "$TARGET" ]; then
+    TARGET="$HOME"
+fi
+
+cd "$TARGET" || exit 1
+exec /usr/bin/glyph
+
