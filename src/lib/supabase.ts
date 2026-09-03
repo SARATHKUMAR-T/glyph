@@ -3,21 +3,17 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
 
-// Lazily initialized so that missing env vars don't throw at module load time
-// and crash the entire app (which would cause a blank screen in production).
-let _supabase: SupabaseClient | null = null;
-
-function getSupabaseClient(): SupabaseClient {
-  if (!_supabase) {
-    if (!supabaseUrl || !supabasePublishableKey) {
-      throw new Error(
-        "Supabase env vars (VITE_SUPABASE_URL / VITE_SUPABASE_PUBLISHABLE_KEY) are not set."
-      );
-    }
-    _supabase = createClient(supabaseUrl, supabasePublishableKey);
-  }
-  return _supabase;
-}
+/**
+ * Supabase only backs the optional `quote` builtin. `createClient` throws when
+ * the credentials are missing, and this module is reachable from the terminal's
+ * builtin commands, so an unconfigured build (no `.env`) would fail to boot at
+ * all rather than simply losing quotes. Skip the client instead and let
+ * `getRandomQuote` report it like any other lookup failure.
+ */
+export const supabase =
+  supabaseUrl && supabasePublishableKey
+    ? createClient(supabaseUrl, supabasePublishableKey)
+    : null;
 
 export function formatErrorMessage(error: unknown): string {
   if (!error) return "Unknown error";
@@ -39,7 +35,13 @@ export function formatErrorMessage(error: unknown): string {
 
 export async function getRandomQuote(): Promise<{ quote: string; author: string }> {
   try {
-    const { data, error } = await getSupabaseClient().rpc("get_random_quote");
+    if (!supabase) {
+      throw new Error(
+        "Quotes are unavailable: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY were not set when this build was made."
+      );
+    }
+
+    const { data, error } = await supabase.rpc("get_random_quote");
 
     if (error) {
       throw new Error(formatErrorMessage(error));
