@@ -36,6 +36,8 @@ type TerminalViewProps = {
   active: boolean;
   isPaneActive: boolean;
   isSplit?: boolean;
+  /** True when this pane is currently shown enlarged in the expanded-pane modal. */
+  isExpanded?: boolean;
   pane: TerminalPaneModel;
   tabId: string;
   blocks: TerminalBlockModel[];
@@ -49,6 +51,7 @@ type TerminalViewProps = {
   onCloseSearch: () => void;
   onCloseTerminal?: () => void;
   onClosePane?: (paneId: string) => void;
+  onExpandPane?: (paneId: string) => void;
   onSplitVertical?: (paneId: string) => void;
   onSplitHorizontal?: (paneId: string) => void;
   onNewTerminal?: () => void;
@@ -61,6 +64,7 @@ type TerminalViewProps = {
   onSessionResize: (paneId: string, cols: number, rows: number) => void;
   onSessionStatus: (paneId: string, status: TerminalStatus, error?: string) => void;
   onTitleChange?: (paneId: string, title: string) => void;
+  isWindowMaximized?: boolean;
   onToggleSettings?: () => void;
 };
 
@@ -78,11 +82,14 @@ export function TerminalView({
   canClosePane = false,
   isPaneActive,
   isSplit = false,
+  isExpanded = false,
+  isWindowMaximized = false,
   keybindings,
   onActivatePane,
   onClosePane,
   onCloseSearch,
   onCloseTerminal,
+  onExpandPane,
   onNewTerminal,
   onNewWindow,
   onNextTab,
@@ -135,6 +142,7 @@ export function TerminalView({
     onPrevTab,
     onCloseTerminal,
     onClosePane,
+    onExpandPane,
     onSplitVertical,
     onSplitHorizontal,
     onNewTerminal,
@@ -154,6 +162,7 @@ export function TerminalView({
       onPrevTab,
       onCloseTerminal,
       onClosePane,
+      onExpandPane,
       onSplitVertical,
       onSplitHorizontal,
       onNewTerminal,
@@ -795,49 +804,69 @@ export function TerminalView({
           )}
         </div>
         <div className="pane-header-controls">
-          <button
-            type="button"
-            className="pane-control-btn"
-            title="Split Right (Ctrl+Shift+D)"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSplitVertical?.(pane.paneId);
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2.5" />
-              <line x1="12" y1="3" x2="12" y2="21" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="pane-control-btn"
-            title="Split Down (Ctrl+Shift+O)"
-            onClick={(e) => {
-              e.stopPropagation();
-              onSplitHorizontal?.(pane.paneId);
-            }}
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2.5" />
-              <line x1="3" y1="12" x2="21" y2="12" />
-            </svg>
-          </button>
-          {canClosePane && (
+          {isSplit && !isExpanded && isWindowMaximized && (
             <button
               type="button"
-              className="pane-control-btn pane-control-close"
-              title="Close Pane (Ctrl+Shift+W)"
+              className="pane-control-btn"
+              title="Expand Pane (Full Window)"
               onClick={(e) => {
                 e.stopPropagation();
-                onClosePane?.(pane.paneId);
+                onExpandPane?.(pane.paneId);
               }}
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+                <circle cx="12" cy="12" r="3" />
               </svg>
             </button>
+          )}
+          {!isExpanded && (
+            <>
+              <button
+                type="button"
+                className="pane-control-btn"
+                title="Split Right (Ctrl+Shift+D)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSplitVertical?.(pane.paneId);
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2.5" />
+                  <line x1="12" y1="3" x2="12" y2="21" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                className="pane-control-btn"
+                title="Split Down (Ctrl+Shift+O)"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSplitHorizontal?.(pane.paneId);
+                }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2.5" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                </svg>
+              </button>
+              {canClosePane && (
+                <button
+                  type="button"
+                  className="pane-control-btn pane-control-close"
+                  title="Close Pane (Ctrl+Shift+W)"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onClosePane?.(pane.paneId);
+                  }}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>

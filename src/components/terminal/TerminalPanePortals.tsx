@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import type { ITheme } from "@xterm/xterm";
 
@@ -20,6 +20,11 @@ type TerminalPanePortalsProps = {
   keybindings: KeybindingsConfig;
   panes: TerminalPaneModel[];
   paneCount: number;
+  /**
+   * The pane id currently shown enlarged in the expanded-pane modal, if any.
+   */
+  expandedPaneId?: string;
+  isWindowMaximized?: boolean;
   searchOpen: boolean;
   settings?: TerminalSettings;
   /** Active xterm palette from useTerminalTheme — threaded into every pane */
@@ -29,6 +34,7 @@ type TerminalPanePortalsProps = {
   onClosePane?: (paneId: string) => void;
   onCloseSearch: () => void;
   onCloseTerminal?: () => void;
+  onExpandPane?: (paneId: string) => void;
   onNewTerminal?: () => void;
   onNewWindow?: () => void;
   onNextTab?: () => void;
@@ -64,6 +70,9 @@ export function TerminalPanePortals({
   onClosePane,
   onCloseSearch,
   onCloseTerminal,
+  expandedPaneId,
+  isWindowMaximized,
+  onExpandPane,
   onNewTerminal,
   onNewWindow,
   onNextTab,
@@ -148,6 +157,18 @@ export function TerminalPanePortals({
     }
   });
 
+  // Automatically focus the enlarged terminal so user can type immediately
+  useEffect(() => {
+    if (expandedPaneId) {
+      const timer = setTimeout(() => {
+        const container = containersRef.current.get(expandedPaneId);
+        const textarea = container?.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
+        textarea?.focus();
+      }, 60);
+      return () => clearTimeout(timer);
+    }
+  }, [expandedPaneId]);
+
   return (
     <>
       {panes.map((pane) => {
@@ -162,11 +183,14 @@ export function TerminalPanePortals({
             canClosePane={paneCount > 1}
             isPaneActive={isPaneActive}
             isSplit={paneCount > 1}
+            isExpanded={expandedPaneId === pane.paneId}
+            isWindowMaximized={isWindowMaximized}
             keybindings={keybindings}
             onActivatePane={onActivatePane}
             onClosePane={onClosePane}
             onCloseSearch={onCloseSearch}
             onCloseTerminal={onCloseTerminal}
+            onExpandPane={onExpandPane}
             onNewTerminal={onNewTerminal}
             onNewWindow={onNewWindow}
             onNextTab={onNextTab}
