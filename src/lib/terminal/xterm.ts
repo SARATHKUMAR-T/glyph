@@ -37,6 +37,7 @@ const DEFAULT_THEME: ITheme = {
 
 export function createNothingXterm(options?: CreateXtermOptions) {
   return new Terminal({
+    allowProposedApi: true,
     allowTransparency: true,
     convertEol: true,
     cursorBlink: options?.cursorBlink ?? true,
@@ -51,4 +52,5 @@ export function createNothingXterm(options?: CreateXtermOptions) {
     tabStopWidth: 8,
     theme: options?.xtermTheme ?? DEFAULT_THEME,
   });
+
 }

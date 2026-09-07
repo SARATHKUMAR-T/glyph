@@ -43,12 +43,7 @@
     "category": "DeveloperTool",
     "linux": {
       "deb": {
-        "files": {
-          "/usr/share/glyph/scripts/Open in Glyph": "scripts/nautilus/Open in Glyph"
-        },
-        "desktopTemplate": "templates/glyph.desktop",
-        "postInstallScript": "scripts/deb-postinstall.sh",
-        "postRemoveScript": "scripts/deb-postremove.sh"
+        "desktopTemplate": "templates/glyph.desktop"
       }
     }
   }
