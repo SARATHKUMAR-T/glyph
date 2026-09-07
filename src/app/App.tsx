@@ -414,7 +414,14 @@ export function App() {
     onNextTab: handleNextTab,
     onPrevTab: handlePrevTab,
     onSearch: () => {
-      setSearchOpen(true);
+      setSearchOpen((prev) => {
+        if (prev) {
+          const input = document.querySelector<HTMLInputElement>(".terminal-search-input");
+          input?.focus();
+          input?.select();
+        }
+        return true;
+      });
       setSettingsOpen(false);
     },
     onToggleSettings: () => setSettingsOpen((open) => !open),
@@ -448,7 +455,14 @@ export function App() {
       <TitleBar
         onNewWindow={openNewWindow}
         onSearch={() => {
-          setSearchOpen(true);
+          setSearchOpen((prev) => {
+            if (prev) {
+              const input = document.querySelector<HTMLInputElement>(".terminal-search-input");
+              input?.focus();
+              input?.select();
+            }
+            return true;
+          });
           setSettingsOpen(false);
         }}
         onToggleSettings={() => setSettingsOpen((open) => !open)}

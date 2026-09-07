@@ -28,6 +28,7 @@ import type {
 } from "../../lib/terminal/types";
 import { matchesKeyCombo, type KeybindingsConfig } from "../../hooks/useKeybindings";
 import type { TerminalSettings } from "../../hooks/useTerminalSettings";
+import { getTheme, DEFAULT_THEME_ID } from "../../lib/terminal/themes";
 import { TerminalBlock } from "./TerminalBlock";
 
 const pendingOutputMap = new Map<string, string[]>();
@@ -120,6 +121,9 @@ export function TerminalView({
   const mockSessionRef = useRef<ReturnType<typeof attachMockShell> | null>(null);
   const keybindingsRef = useRef<KeybindingsConfig>(keybindings);
   const [query, setQuery] = useState("");
+  const [matchInfo, setMatchInfo] = useState<{ index: number; count: number } | null>(null);
+  const searchDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
 
   const scrollPosRef = useRef<{ viewportY: number; isAtBottom: boolean }>({
     viewportY: 0,
@@ -289,6 +293,18 @@ export function TerminalView({
     terminal.loadAddon(searchAddon);
     terminal.loadAddon(webLinksAddon);
     terminal.open(host);
+
+    // Track search result count for UI badge
+    disposables.push(
+      searchAddon.onDidChangeResults((e) => {
+        setMatchInfo(
+          e.resultCount > 0
+            ? { index: e.resultIndex, count: e.resultCount }
+            : null,
+        );
+      }),
+    );
+
 
     const scheduleResize = () => {
       cancelAnimationFrame(resizeFrame);
@@ -670,6 +686,10 @@ export function TerminalView({
 
     return () => {
       disposed = true;
+      if (searchDebounceTimerRef.current) {
+        clearTimeout(searchDebounceTimerRef.current);
+        searchDebounceTimerRef.current = null;
+      }
       cancelAnimationFrame(resizeFrame);
       resizeObserver.disconnect();
       if (mockSessionRef.current) {
@@ -715,16 +735,16 @@ export function TerminalView({
   }, [active, restoreScrollPosition]);
 
   useEffect(() => {
-    if (active && isPaneActive) {
+    if (active && isPaneActive && !searchOpen) {
       const timer = setTimeout(() => {
         fitAndResize();
         terminalRef.current?.focus();
       }, 25);
       return () => clearTimeout(timer);
-    } else {
+    } else if (!active || !isPaneActive) {
       terminalRef.current?.blur();
     }
-  }, [active, isPaneActive, fitAndResize]);
+  }, [active, isPaneActive, fitAndResize, searchOpen]);
 
   useEffect(() => {
     const terminal = terminalRef.current;
@@ -738,15 +758,51 @@ export function TerminalView({
     }
   }, [active, isPaneActive, fitAndResize, settings?.cursorBlink, settings?.cursorStyle, settings?.fontSize]);
 
+// Search decorations: outlines and ruler colors (fill tints are handled in CSS with translucent rgba overlays)
+const DARK_SEARCH_DECORATIONS = {
+  matchBorder: "#eab308",
+  matchOverviewRuler: "transparent",
+  activeMatchBorder: "#ff4d2e",
+  activeMatchColorOverviewRuler: "transparent",
+} as const;
+
+const LIGHT_SEARCH_DECORATIONS = {
+  matchBorder: "#d4a000",
+  matchOverviewRuler: "transparent",
+  activeMatchBorder: "#e03131",
+  activeMatchColorOverviewRuler: "transparent",
+} as const;
+
+
+
+  const isLightTheme =
+    getTheme(settings?.themeId ?? DEFAULT_THEME_ID).category === "light" ||
+    (typeof document !== "undefined" && document.documentElement.dataset.glyphThemeCategory === "light");
+
+  const searchDecorations = isLightTheme ? LIGHT_SEARCH_DECORATIONS : DARK_SEARCH_DECORATIONS;
+
   useEffect(() => {
     if (searchOpen && isPaneActive) {
       const timer = setTimeout(() => {
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
-      }, 30);
-      return () => clearTimeout(timer);
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          searchInputRef.current.select();
+        }
+      }, 50);
+      return () => {
+        clearTimeout(timer);
+        if (searchDebounceTimerRef.current) {
+          clearTimeout(searchDebounceTimerRef.current);
+          searchDebounceTimerRef.current = null;
+        }
+      };
     } else {
+      if (searchDebounceTimerRef.current) {
+        clearTimeout(searchDebounceTimerRef.current);
+        searchDebounceTimerRef.current = null;
+      }
       setQuery("");
+      setMatchInfo(null);
       searchAddonRef.current?.clearDecorations();
       if (active && isPaneActive) {
         terminalRef.current?.focus();
@@ -754,28 +810,98 @@ export function TerminalView({
     }
   }, [active, isPaneActive, searchOpen]);
 
-  const handleSearchNext = () => {
-    if (query) {
-      searchAddonRef.current?.findNext(query, { incremental: true });
+  const executeSearch = (searchTerm: string, incremental = true) => {
+    if (!searchTerm) {
+      setMatchInfo(null);
+      searchAddonRef.current?.clearDecorations();
+      return;
     }
+    if (!searchAddonRef.current) return;
+    try {
+      searchAddonRef.current.findNext(searchTerm, {
+        incremental,
+        caseSensitive: false,
+        decorations: searchDecorations,
+      });
+    } catch (err) {
+      console.warn("[TerminalView] findNext with decorations failed, retrying without:", err);
+      searchAddonRef.current.findNext(searchTerm, {
+        incremental,
+        caseSensitive: false,
+      });
+    }
+  };
+
+  // Re-run search decorations when the theme changes so highlight colors adapt instantly
+  useEffect(() => {
+    if (searchOpen && query) {
+      executeSearch(query, true);
+    }
+  }, [settings?.themeId, isLightTheme]);
+
+
+  const handleSearchNext = () => {
+    if (!query || !searchAddonRef.current) return;
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+      searchDebounceTimerRef.current = null;
+    }
+    executeSearch(query, false);
   };
 
   const handleSearchPrevious = () => {
-    if (query) {
-      searchAddonRef.current?.findPrevious(query, { incremental: true });
+    if (!query || !searchAddonRef.current) return;
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+      searchDebounceTimerRef.current = null;
+    }
+    try {
+      searchAddonRef.current.findPrevious(query, {
+        caseSensitive: false,
+        decorations: searchDecorations,
+      });
+    } catch (err) {
+      console.warn("[TerminalView] findPrevious with decorations failed, retrying without:", err);
+      searchAddonRef.current.findPrevious(query, {
+        caseSensitive: false,
+      });
     }
   };
+
 
   const handleQueryChange = (value: string) => {
     setQuery(value);
-    if (value) {
-      searchAddonRef.current?.findNext(value, { incremental: true });
-    } else {
-      searchAddonRef.current?.clearDecorations();
+    if (searchDebounceTimerRef.current) {
+      clearTimeout(searchDebounceTimerRef.current);
+      searchDebounceTimerRef.current = null;
     }
+    if (!value) {
+      setMatchInfo(null);
+      searchAddonRef.current?.clearDecorations();
+      return;
+    }
+    searchDebounceTimerRef.current = setTimeout(() => {
+      executeSearch(value, true);
+    }, 150);
   };
 
-  const focusTerminal = () => {
+
+
+
+  const focusTerminal = (e?: React.SyntheticEvent) => {
+    if (e?.target instanceof HTMLElement) {
+      if (
+        e.target.closest(".terminal-search") ||
+        e.target.closest(".pane-header-actions") ||
+        e.target.closest("button") ||
+        e.target.closest("input")
+      ) {
+        return;
+      }
+    }
+    if (searchOpen && isPaneActive && document.activeElement === searchInputRef.current) {
+      return;
+    }
     onActivatePane(pane.paneId);
     terminalRef.current?.focus();
   };
@@ -791,7 +917,11 @@ export function TerminalView({
     <div
       className={activeClass}
       onClick={focusTerminal}
-      onFocus={focusTerminal}
+      onFocus={(e) => {
+        if (e.target === e.currentTarget) {
+          focusTerminal(e);
+        }
+      }}
       tabIndex={-1}
     >
       <div className="pane-header-bar">
@@ -886,6 +1016,9 @@ export function TerminalView({
             className="terminal-search"
             onClick={(e) => e.stopPropagation()}
             onMouseDown={(e) => e.stopPropagation()}
+            onMouseUp={(e) => e.stopPropagation()}
+            onFocus={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
           >
             <input
               ref={searchInputRef}
@@ -894,6 +1027,10 @@ export function TerminalView({
               placeholder="Search buffer..."
               value={query}
               onChange={(e) => handleQueryChange(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onMouseUp={(e) => e.stopPropagation()}
+              onFocus={(e) => e.stopPropagation()}
               onKeyDown={(e) => {
                 e.stopPropagation();
                 if (e.key === "Enter") {
@@ -904,17 +1041,63 @@ export function TerminalView({
                   }
                 } else if (e.key === "Escape") {
                   onCloseSearch();
+                  terminalRef.current?.focus();
                 }
               }}
             />
-            <button type="button" className="terminal-search-btn" onClick={handleSearchPrevious} title="Previous">
-              ↑
+            {query && (
+              <span className="terminal-search-count">
+                {matchInfo
+                  ? matchInfo.index === -1
+                    ? `1000+`
+                    : `${matchInfo.index + 1}/${matchInfo.count}`
+                  : "0/0"}
+              </span>
+            )}
+
+            <button
+              type="button"
+              className="terminal-search-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSearchPrevious();
+              }}
+              title="Previous match (Shift+Enter)"
+              aria-label="Previous match"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="18 15 12 9 6 15" />
+              </svg>
             </button>
-            <button type="button" className="terminal-search-btn" onClick={handleSearchNext} title="Next">
-              ↓
+            <button
+              type="button"
+              className="terminal-search-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSearchNext();
+              }}
+              title="Next match (Enter)"
+              aria-label="Next match"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
             </button>
-            <button type="button" className="terminal-search-btn" onClick={onCloseSearch} title="Close">
-              ✕
+            <button
+              type="button"
+              className="terminal-search-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onCloseSearch();
+                terminalRef.current?.focus();
+              }}
+              title="Close search (Escape)"
+              aria-label="Close search"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
             </button>
           </div>
         )}

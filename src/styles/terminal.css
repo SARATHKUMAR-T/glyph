@@ -282,6 +282,51 @@
   margin-right: 0 !important;
 }
 
+/* Hide xterm overview ruler gutter and its left border line completely for all themes */
+.xterm-decoration-overview-ruler {
+  display: none !important;
+}
+
+/* Base search match highlight boxes */
+.xterm-find-result-decoration,
+.xterm-find-active-result-decoration {
+  border-radius: 3px !important;
+  box-sizing: border-box !important;
+  pointer-events: none !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+/* Light Theme: crisp golden border for matches; bold red-orange border for active match */
+[data-glyph-theme-category="light"] .xterm-find-result-decoration:not(.xterm-find-active-result-decoration) {
+  outline: 1.5px solid #d4a000 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+[data-glyph-theme-category="light"] .xterm-find-active-result-decoration {
+  outline: 2px solid #e03131 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: 0 0 0 1px rgba(224, 49, 49, 0.4) !important;
+}
+
+/* Dark Theme: crisp amber border for matches; glowing Nothing-red border for active match */
+:root:not([data-glyph-theme-category="light"]) .xterm-find-result-decoration:not(.xterm-find-active-result-decoration) {
+  outline: 1.5px solid #eab308 !important;
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
+:root:not([data-glyph-theme-category="light"]) .xterm-find-active-result-decoration {
+  outline: 2px solid #ff4d2e !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  box-shadow: 0 0 4px rgba(255, 77, 46, 0.6) !important;
+}
+
+
+
 .xterm-viewport {
   /* Extend the viewport (and therefore the scrollbar) rightward to cover
      the 12px padding on .xterm-host, so the scrollbar sits at the true
@@ -390,38 +435,107 @@
   position: absolute;
   top: 42px;
   right: 18px;
-  z-index: 4;
-  width: min(360px, calc(100% - 36px));
-  height: 36px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 32px 32px 32px;
+  z-index: 50;
+  width: min(400px, calc(100% - 36px));
+  height: 38px;
+  display: flex;
+  align-items: center;
   gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--nothing-line-strong);
+  padding: 4px 6px;
+  border: 1px solid var(--glyph-line-strong);
   border-radius: 8px;
-  background: rgba(10, 10, 10, 0.96);
-  box-shadow: 0 12px 28px var(--nothing-shadow);
+  background: var(--glyph-surface-raised);
+  box-shadow: 0 12px 32px var(--glyph-shadow), 0 2px 8px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: terminal-search-in 120ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.terminal-search input {
+@keyframes terminal-search-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.terminal-search-input {
+  flex: 1;
   min-width: 0;
-  border: 0;
-  outline: 0;
+  height: 28px;
+  border: 1px solid var(--glyph-line);
+  outline: none;
   border-radius: 5px;
-  padding: 0 9px;
-  color: var(--nothing-white);
-  background: var(--nothing-black);
+  padding: 0 10px;
+  color: var(--glyph-fg);
+  background: var(--glyph-surface);
   font-family: var(--nothing-mono);
   font-size: 12px;
+  letter-spacing: 0.2px;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
 }
 
-.terminal-search button {
-  width: 28px;
-  height: 26px;
-  border-radius: 5px;
-  font-family: var(--nothing-mono);
-  font-size: 13px;
+.terminal-search-input::placeholder {
+  color: var(--glyph-fg-muted);
+  opacity: 0.7;
 }
+
+.terminal-search-input:focus {
+  border-color: var(--glyph-accent);
+  background: var(--glyph-bg);
+  box-shadow: 0 0 0 1px var(--glyph-accent-dim);
+}
+
+/* Match count badge: "3/42" shown inline after the input */
+.terminal-search-count {
+  flex-shrink: 0;
+  min-width: 38px;
+  text-align: right;
+  padding: 0 6px;
+  font-family: var(--nothing-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--glyph-fg-muted);
+  white-space: nowrap;
+  user-select: none;
+  pointer-events: none;
+  letter-spacing: 0.3px;
+}
+
+.terminal-search-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--glyph-fg-muted);
+  cursor: pointer !important;
+  padding: 0;
+  transition: all 120ms ease;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.terminal-search-btn:hover {
+  border-color: var(--glyph-line);
+  background: var(--glyph-accent-dim);
+  color: var(--glyph-fg);
+}
+
+.terminal-search-btn:active {
+  transform: scale(0.92);
+}
+
+.terminal-search-btn svg {
+  display: block;
+}
+
 
 .terminal-input {
   display: none;
