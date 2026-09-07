@@ -1,0 +1,19 @@
+tauri-runtime-wry only names webkit2gtk::WebView as a type; it calls no
+WebKitGTK 2.40 API. Dropping the "v2_40" feature request lets the crate build
+against Ubuntu 20.04's WebKitGTK 2.38.6, which is the version wry itself asks
+for. Without this, webkit2gtk-sys refuses to configure:
+
+    Requested 'webkit2gtk-4.1 >= 2.40' but version of WebKitGTK is 2.38.6
+
+diff -ruN torig/Cargo.toml tnew/Cargo.toml
+--- torig/Cargo.toml	2006-07-24 06:51:28.000000000 +0530
++++ tnew/Cargo.toml	2026-08-26 13:09:38.622584237 +0530
+@@ -112,7 +112,7 @@
+ 
+ [target.'cfg(any(target_os = "linux", target_os = "dragonfly", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))'.dependencies.webkit2gtk]
+ version = "=2.0"
+-features = ["v2_40"]
++features = []
+ 
+ [target.'cfg(target_os = "android")'.dependencies.jni]
+ version = "0.21"

@@ -1,0 +1,5 @@
+# The builder image only needs docker/focal-compat.c; everything else is bind
+# mounted at run time by scripts/build-local.sh. Without this the build context
+# is ~156MB of node_modules.
+*
+!docker/focal-compat.c
