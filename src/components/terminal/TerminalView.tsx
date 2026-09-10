@@ -8,6 +8,7 @@ import { readText as clipboardReadText } from "@tauri-apps/plugin-clipboard-mana
 import { createNothingXterm } from "../../lib/terminal/xterm";
 import {
   createTerminalSession,
+  getTerminalCwd,
   openExternalUrl,
   resizeTerminalSession,
   writeTerminalData,
@@ -30,8 +31,14 @@ import { matchesKeyCombo, type KeybindingsConfig } from "../../hooks/useKeybindi
 import type { TerminalSettings } from "../../hooks/useTerminalSettings";
 import { getTheme, DEFAULT_THEME_ID } from "../../lib/terminal/themes";
 import { TerminalBlock } from "./TerminalBlock";
+import { AIAssistantOverlay } from "./AIAssistantOverlay";
+import { CompletionEngine, type CompletionCandidate } from "../../lib/autocomplete";
+import { AutocompletePopup } from "./AutocompletePopup";
+import { GhostTextOverlay } from "./GhostTextOverlay";
+import { LocalKnowledgeManager } from "../../lib/knowledge/index.js";
 
 const pendingOutputMap = new Map<string, string[]>();
+
 
 type TerminalViewProps = {
   active: boolean;
@@ -124,11 +131,261 @@ export function TerminalView({
   const [matchInfo, setMatchInfo] = useState<{ index: number; count: number } | null>(null);
   const searchDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // AI Assistant state
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiInitialPrompt, setAiInitialPrompt] = useState("");
+  const [aiInitialMode, setAiInitialMode] = useState<"generate" | "diagnose">("generate");
+  const [aiDiagnoseContext, setAiDiagnoseContext] = useState<
+    { command: string; exitCode: number; errorOutput?: string } | undefined
+  >(undefined);
+
+  const handleRunAICommand = useCallback((command: string) => {
+    const sessionId = sessionIdRef.current;
+    if (sessionId && isTauriRuntime()) {
+      void writeTerminalData(sessionId, command + "\r");
+    } else if (mockSessionRef.current) {
+      mockSessionRef.current.handleData(command + "\r");
+    }
+    terminalRef.current?.focus();
+  }, []);
+
+  const handleInsertAICommand = useCallback((command: string) => {
+    const sessionId = sessionIdRef.current;
+    if (sessionId && isTauriRuntime()) {
+      void writeTerminalData(sessionId, command);
+    } else if (mockSessionRef.current) {
+      mockSessionRef.current.handleData(command);
+    }
+    terminalRef.current?.focus();
+  }, []);
+
+  const handleOpenAIAssistant = useCallback(
+    (prompt = "", mode: "generate" | "diagnose" = "generate") => {
+      setAiInitialPrompt(prompt);
+      setAiInitialMode(mode);
+      if (mode === "diagnose") {
+        const failedBlock = [...blocks].reverse().find((b) => b.exitCode !== undefined && b.exitCode !== 0);
+        if (failedBlock) {
+          setAiDiagnoseContext({
+            command: failedBlock.command || "",
+            exitCode: failedBlock.exitCode ?? 1,
+          });
+        }
+      } else {
+        setAiDiagnoseContext(undefined);
+      }
+      setAiOpen(true);
+    },
+    [blocks],
+  );
+
+  const handleCloseAIAssistant = useCallback(() => {
+    setAiOpen(false);
+    terminalRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fitAddonRef.current?.fit();
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [aiOpen]);
+
+  // Local Intelligent Autocomplete state
+  const [autocompleteVisible, setAutocompleteVisible] = useState(false);
+  const [autocompleteCandidates, setAutocompleteCandidates] = useState<CompletionCandidate[]>([]);
+  const [autocompleteSelectedIndex, setAutocompleteSelectedIndex] = useState(0);
+  const [autocompletePosition, setAutocompletePosition] = useState<{
+    top: number;
+    left: number;
+    renderAbove?: boolean;
+    maxHeight?: number;
+  }>({ top: 40, left: 20, renderAbove: false });
+  const autocompleteDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const currentLineBufferRef = useRef("");
+
+  // Ghost text (VS Code–style inline suggestion)
+  const [ghostText, setGhostText] = useState<{ completion: string; typed: string } | null>(null);
+  const ghostTextRef = useRef<{ completion: string; typed: string } | null>(null);
+
+  const autocompleteVisibleRef = useRef(autocompleteVisible);
+  const candidatesRef = useRef(autocompleteCandidates);
+  const selectedIndexRef = useRef(autocompleteSelectedIndex);
+
+  useEffect(() => {
+    autocompleteVisibleRef.current = autocompleteVisible;
+  }, [autocompleteVisible]);
+
+  useEffect(() => {
+    candidatesRef.current = autocompleteCandidates;
+  }, [autocompleteCandidates]);
+
+  useEffect(() => {
+    selectedIndexRef.current = autocompleteSelectedIndex;
+  }, [autocompleteSelectedIndex]);
+
+  useEffect(() => {
+    ghostTextRef.current = ghostText;
+  }, [ghostText]);
+
+  const handleAcceptCandidate = useCallback((candidate: CompletionCandidate) => {
+    const currentLine = currentLineBufferRef.current;
+    const before = currentLine.slice(0, candidate.replacementStart);
+    const after = currentLine.slice(candidate.replacementEnd);
+    const suffix = candidate.text.endsWith("/") ? "" : " ";
+    const newLine = before + candidate.text + suffix + after;
+
+    currentLineBufferRef.current = newLine;
+    setAutocompleteVisible(false);
+
+    const sessionId = sessionIdRef.current;
+    if (sessionId && isTauriRuntime()) {
+      void writeTerminalData(sessionId, "\x15" + newLine);
+    } else if (mockSessionRef.current) {
+      mockSessionRef.current.handleData("\x15" + newLine);
+    }
+    terminalRef.current?.focus();
+  }, []);
+
+  const triggerAutocomplete = useCallback(
+    (line: string, cursorOffset: number) => {
+      if (autocompleteDebounceTimerRef.current) {
+        clearTimeout(autocompleteDebounceTimerRef.current);
+      }
+
+      if (!line.trim()) {
+        setAutocompleteVisible(false);
+        setAutocompleteCandidates([]);
+        return;
+      }
+
+      autocompleteDebounceTimerRef.current = setTimeout(async () => {
+        let activeCwd = pane.cwd || undefined;
+        const sid = sessionIdRef.current;
+        if (sid && isTauriRuntime()) {
+          try {
+            const liveCwd = await getTerminalCwd(sid);
+            if (liveCwd) {
+              activeCwd = liveCwd;
+              // Keep knowledge manager in sync with the live CWD
+              LocalKnowledgeManager.getInstance().updateCwd(liveCwd);
+            }
+          } catch {
+            // keep fallback
+          }
+        }
+
+        // History is now indexed by LocalKnowledgeManager (HistoryProvider reads from it).
+        // We still pass the list for legacy context field, but providers use the manager's index.
+        let historyList: string[] = [];
+        try {
+          const raw = localStorage.getItem("glyph:command-history");
+          if (raw) historyList = JSON.parse(raw) as string[];
+        } catch { /* ignore */ }
+
+        const blockCommands = blocks
+          .map((b) => b.command)
+          .filter((c): c is string => Boolean(c && c.trim()));
+        historyList = Array.from(new Set([...historyList, ...blockCommands]));
+
+        const result = await CompletionEngine.getInstance().getCompletions({
+          input: line,
+          cursorPosition: cursorOffset,
+          cwd: activeCwd,
+          shell: "/bin/bash",
+          history: historyList,
+        }, 12);
+
+        if (result && result.candidates.length > 0) {
+          setAutocompleteCandidates(result.candidates);
+          setAutocompleteSelectedIndex(0);
+
+          // Set ghost text from top candidate
+          const top0 = result.candidates[0];
+          if (top0) {
+            // activeToken typed portion — everything from start to cursor end
+            const typedPortion = line.slice(top0.replacementStart, top0.replacementEnd);
+            setGhostText({ completion: top0.text, typed: typedPortion });
+          }
+
+          const term = terminalRef.current;
+          if (term) {
+            const buffer = term.buffer.active;
+            const cursorX = buffer.cursorX;
+            const cursorY = buffer.cursorY;
+
+            const renderService = (
+              term as unknown as {
+                _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } };
+              }
+            )._core?._renderService;
+
+            const cellW = renderService?.dimensions?.css?.cell?.width || 9;
+            const cellH = renderService?.dimensions?.css?.cell?.height || 18;
+
+            const host = hostRef.current;
+            const hostOffsetTop = host?.offsetTop || 0;
+            const hostOffsetLeft = host?.offsetLeft || 0;
+
+            const hostStyle = host ? window.getComputedStyle(host) : null;
+            const padTop = hostStyle ? parseFloat(hostStyle.paddingTop) || 6 : 6;
+            const padLeft = hostStyle ? parseFloat(hostStyle.paddingLeft) || 12 : 12;
+
+            const cursorYTop = hostOffsetTop + padTop + cursorY * cellH;
+            const cursorYBottom = cursorYTop + cellH;
+            const cursorXLeft = hostOffsetLeft + padLeft + cursorX * cellW;
+
+            const stage = host?.parentElement;
+            const stageHeight = stage?.clientHeight || (term.rows * cellH + padTop * 2);
+            const stageWidth = stage?.clientWidth || (term.cols * cellW + padLeft * 2);
+
+            const candidateCount = result.candidates.length;
+            const estimatedPopupHeight = Math.min(candidateCount * 30 + 40, 320);
+
+            const spaceBelow = stageHeight - cursorYBottom;
+            const spaceAbove = cursorYTop;
+
+            const renderAbove = spaceBelow < estimatedPopupHeight && spaceAbove > spaceBelow;
+
+            let popupTop: number;
+            let maxHeight: number;
+
+            if (renderAbove) {
+              popupTop = cursorYTop - 4;
+              maxHeight = Math.min(280, Math.max(cursorYTop - 30, 80));
+            } else {
+              popupTop = cursorYBottom + 4;
+              maxHeight = Math.min(280, Math.max(stageHeight - cursorYBottom - 30, 80));
+            }
+
+            const popupLeft = Math.min(
+              Math.max(cursorXLeft, 10),
+              Math.max(stageWidth - 360, 10)
+            );
+
+            setAutocompletePosition({
+              top: popupTop,
+              left: popupLeft,
+              renderAbove,
+              maxHeight,
+            });
+            setAutocompleteVisible(true);
+          }
+        } else {
+          setAutocompleteVisible(false);
+          setAutocompleteCandidates([]);
+          setGhostText(null);
+        }
+      }, 15);
+    },
+    [blocks, pane.cwd]
+  );
 
   const scrollPosRef = useRef<{ viewportY: number; isAtBottom: boolean }>({
     viewportY: 0,
     isAtBottom: true,
   });
+
   const activeRef = useRef(active);
   const isRestoringScrollRef = useRef(false);
 
@@ -195,6 +452,26 @@ export function TerminalView({
     }, 100);
   }, []);
 
+  useEffect(() => {
+    if (!isPaneActive) return;
+
+    const handleToggleAI = () => {
+      setAiOpen((prev) => !prev);
+    };
+
+    const handleExplainAI = () => {
+      handleOpenAIAssistant("", "diagnose");
+    };
+
+    window.addEventListener("glyph:toggle-ai", handleToggleAI);
+    window.addEventListener("glyph:explain-ai", handleExplainAI);
+    return () => {
+      window.removeEventListener("glyph:toggle-ai", handleToggleAI);
+      window.removeEventListener("glyph:explain-ai", handleExplainAI);
+    };
+  }, [isPaneActive, handleOpenAIAssistant]);
+
+
   const fitAndResize = useCallback(() => {
     const terminal = terminalRef.current;
     const fitAddon = fitAddonRef.current;
@@ -211,16 +488,19 @@ export function TerminalView({
       const dims = fitAddon.proposeDimensions();
       if (dims && dims.cols > 0 && dims.rows > 0) {
         let targetRows = dims.rows;
+        let targetCols = dims.cols;
 
         const renderService = (
           terminal as unknown as {
-            _core?: { _renderService?: { dimensions?: { css?: { cell?: { height: number } } } } };
+            _core?: { _renderService?: { dimensions?: { css?: { cell?: { width: number; height: number } } } } };
           }
         )._core?._renderService;
         const cellHeight = renderService?.dimensions?.css?.cell?.height;
+        const cellWidth = renderService?.dimensions?.css?.cell?.width;
+
+        const style = window.getComputedStyle(host);
 
         if (cellHeight && cellHeight > 0) {
-          const style = window.getComputedStyle(host);
           const paddingTop = parseFloat(style.paddingTop) || 0;
           const paddingBottom = parseFloat(style.paddingBottom) || 0;
           const availableHeight = host.clientHeight - paddingTop - paddingBottom;
@@ -231,7 +511,20 @@ export function TerminalView({
           }
         }
 
-        terminal.resize(dims.cols, targetRows);
+        if (cellWidth && cellWidth > 0) {
+          const paddingLeft = parseFloat(style.paddingLeft) || 0;
+          const paddingRight = parseFloat(style.paddingRight) || 0;
+          // Always reserve 16px space for the scrollbar zone at the right edge
+          const SCROLLBAR_RESERVED_GAP = 16;
+          const availableWidth = host.clientWidth - paddingLeft - paddingRight - SCROLLBAR_RESERVED_GAP;
+          const maxCols = Math.floor(availableWidth / cellWidth);
+
+          if (maxCols > 0) {
+            targetCols = maxCols;
+          }
+        }
+
+        terminal.resize(targetCols, targetRows);
       } else {
         fitAddon.fit();
       }
@@ -294,6 +587,11 @@ export function TerminalView({
     terminal.loadAddon(webLinksAddon);
     terminal.open(host);
 
+    // Warm up the local knowledge index in the background (non-blocking).
+    // This caches PATH executables, git metadata, and project scripts so
+    // that the first keypress gets instant completions instead of waiting for IPC.
+    LocalKnowledgeManager.getInstance().initialize(pane.cwd || "/");
+
     // Track search result count for UI badge
     disposables.push(
       searchAddon.onDidChangeResults((e) => {
@@ -318,6 +616,71 @@ export function TerminalView({
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") {
         return true;
+      }
+
+      // ── Ghost text: Right Arrow accepts top candidate inline ──
+      if (event.key === "ArrowRight" && ghostTextRef.current) {
+        event.preventDefault();
+        event.stopPropagation();
+        const top = candidatesRef.current[0];
+        if (top) {
+          handleAcceptCandidate(top);
+        }
+        setGhostText(null);
+        return false;
+      }
+
+      // Autocomplete popup navigation and acceptance
+      if (autocompleteVisibleRef.current && candidatesRef.current.length > 0) {
+        if (event.key === "Tab") {
+          event.preventDefault();
+          event.stopPropagation();
+          const selected = candidatesRef.current[selectedIndexRef.current];
+          if (selected) {
+            handleAcceptCandidate(selected);
+          }
+          setGhostText(null);
+          return false;
+        }
+
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          event.stopPropagation();
+          setAutocompleteSelectedIndex((prev) => {
+            const next = prev < candidatesRef.current.length - 1 ? prev + 1 : 0;
+            // Update ghost text to reflect newly-selected candidate
+            const c = candidatesRef.current[next];
+            if (c) {
+              const typedPortion = currentLineBufferRef.current.slice(c.replacementStart, c.replacementEnd);
+              setGhostText({ completion: c.text, typed: typedPortion });
+            }
+            return next;
+          });
+          return false;
+        }
+
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          event.stopPropagation();
+          setAutocompleteSelectedIndex((prev) => {
+            const next = prev > 0 ? prev - 1 : candidatesRef.current.length - 1;
+            const c = candidatesRef.current[next];
+            if (c) {
+              const typedPortion = currentLineBufferRef.current.slice(c.replacementStart, c.replacementEnd);
+              setGhostText({ completion: c.text, typed: typedPortion });
+            }
+            return next;
+          });
+          return false;
+        }
+
+        if (event.key === "Escape") {
+          event.preventDefault();
+          event.stopPropagation();
+          setAutocompleteVisible(false);
+          setGhostText(null);
+          return false;
+        }
       }
 
       const bindings = keybindingsRef.current;
@@ -463,6 +826,21 @@ export function TerminalView({
         return false;
       }
 
+      if (bindings.toggle_ai && matchesKeyCombo(event, bindings.toggle_ai)) {
+        event.preventDefault();
+        event.stopPropagation();
+        setAiOpen((prev) => !prev);
+        return false;
+      }
+
+      if (bindings.explain_error_ai && matchesKeyCombo(event, bindings.explain_error_ai)) {
+        event.preventDefault();
+        event.stopPropagation();
+        handleOpenAIAssistant("", "diagnose");
+        return false;
+      }
+
+
       if (matchesKeyCombo(event, bindings.toggle_settings)) {
         event.preventDefault();
         event.stopPropagation();
@@ -550,13 +928,25 @@ export function TerminalView({
             if (!sessionIdRef.current) return;
             const sid = sessionIdRef.current;
 
-            // Track input line buffer to detect built-in commands
+            // Track input line buffer to detect built-in commands and trigger autocomplete
             if (data === "\r") {
               // Enter pressed — check for built-in command
+              setAutocompleteVisible(false);
+              setGhostText(null);
               const cmd = inputLineBuffer.trim();
               inputLineBuffer = "";
+              currentLineBufferRef.current = "";
 
               if (cmd.length > 0) {
+                try {
+                  const raw = localStorage.getItem("glyph:command-history");
+                  const list: string[] = raw ? JSON.parse(raw) : [];
+                  list.push(cmd);
+                  localStorage.setItem("glyph:command-history", JSON.stringify(list.slice(-300)));
+                } catch {
+                  // ignore
+                }
+
                 void tryRunBuiltinCommand(cmd, terminal, (d) => {
                   void writeTerminalData(sid, d).catch((error: unknown) =>
                     propsRef.current.onSessionStatus(pane.paneId, "error", formatError(error)),
@@ -582,14 +972,31 @@ export function TerminalView({
             if (data === "\x7f") {
               // Backspace
               inputLineBuffer = inputLineBuffer.slice(0, -1);
+              currentLineBufferRef.current = inputLineBuffer;
+              // Hide ghost & popup immediately when buffer shrinks
+              if (!inputLineBuffer.trim()) {
+                setAutocompleteVisible(false);
+                setGhostText(null);
+                setAutocompleteCandidates([]);
+              } else {
+                triggerAutocomplete(inputLineBuffer, inputLineBuffer.length);
+              }
             } else if (data === "\x03") {
               // Ctrl+C — reset buffer
               inputLineBuffer = "";
+              currentLineBufferRef.current = "";
+              setAutocompleteVisible(false);
+              setGhostText(null);
+              setAutocompleteCandidates([]);
             } else if (data.length === 1 && data.charCodeAt(0) >= 32) {
               inputLineBuffer += data;
+              currentLineBufferRef.current = inputLineBuffer;
+              triggerAutocomplete(inputLineBuffer, inputLineBuffer.length);
             } else if (data.length > 1 && !data.startsWith("\x1b")) {
               // Pasted text
               inputLineBuffer += data;
+              currentLineBufferRef.current = inputLineBuffer;
+              triggerAutocomplete(inputLineBuffer, inputLineBuffer.length);
             }
 
             // Forward everything else to PTY normally
@@ -1011,99 +1418,145 @@ const LIGHT_SEARCH_DECORATIONS = {
       </nav>
 
       <section className="terminal-output" aria-label="Terminal stream">
-        {searchOpen && isPaneActive && (
-          <div
-            className="terminal-search"
-            onClick={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            onMouseUp={(e) => e.stopPropagation()}
-            onFocus={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-          >
-            <input
-              ref={searchInputRef}
-              type="text"
-              className="terminal-search-input"
-              placeholder="Search buffer..."
-              value={query}
-              onChange={(e) => handleQueryChange(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              onMouseDown={(e) => e.stopPropagation()}
-              onMouseUp={(e) => e.stopPropagation()}
-              onFocus={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === "Enter") {
-                  if (e.shiftKey) {
+        <div className="terminal-output-layout">
+          <div className="terminal-main-stage">
+            {searchOpen && isPaneActive && (
+              <div
+                className="terminal-search"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onMouseUp={(e) => e.stopPropagation()}
+                onFocus={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  className="terminal-search-input"
+                  placeholder="Search buffer..."
+                  value={query}
+                  onChange={(e) => handleQueryChange(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onMouseUp={(e) => e.stopPropagation()}
+                  onFocus={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    e.stopPropagation();
+                    if (e.key === "Enter") {
+                      if (e.shiftKey) {
+                        handleSearchPrevious();
+                      } else {
+                        handleSearchNext();
+                      }
+                    } else if (e.key === "Escape") {
+                      onCloseSearch();
+                      terminalRef.current?.focus();
+                    }
+                  }}
+                />
+                {query && (
+                  <span className="terminal-search-count">
+                    {matchInfo
+                      ? matchInfo.index === -1
+                        ? `1000+`
+                        : `${matchInfo.index + 1}/${matchInfo.count}`
+                      : "0/0"}
+                  </span>
+                )}
+
+                <button
+                  type="button"
+                  className="terminal-search-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     handleSearchPrevious();
-                  } else {
+                  }}
+                  title="Previous match (Shift+Enter)"
+                  aria-label="Previous match"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="18 15 12 9 6 15" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="terminal-search-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
                     handleSearchNext();
-                  }
-                } else if (e.key === "Escape") {
-                  onCloseSearch();
-                  terminalRef.current?.focus();
-                }
-              }}
-            />
-            {query && (
-              <span className="terminal-search-count">
-                {matchInfo
-                  ? matchInfo.index === -1
-                    ? `1000+`
-                    : `${matchInfo.index + 1}/${matchInfo.count}`
-                  : "0/0"}
-              </span>
+                  }}
+                  title="Next match (Enter)"
+                  aria-label="Next match"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  className="terminal-search-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCloseSearch();
+                    terminalRef.current?.focus();
+                  }}
+                  title="Close search (Escape)"
+                  aria-label="Close search"
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18" />
+                    <line x1="6" y1="6" x2="18" y2="18" />
+                  </svg>
+                </button>
+              </div>
             )}
 
-            <button
-              type="button"
-              className="terminal-search-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSearchPrevious();
-              }}
-              title="Previous match (Shift+Enter)"
-              aria-label="Previous match"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="18 15 12 9 6 15" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              className="terminal-search-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleSearchNext();
-              }}
-              title="Next match (Enter)"
-              aria-label="Next match"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="6 9 12 15 18 9" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              className="terminal-search-btn"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCloseSearch();
-                terminalRef.current?.focus();
-              }}
-              title="Close search (Escape)"
-              aria-label="Close search"
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-              </svg>
-            </button>
-          </div>
-        )}
+            <div ref={hostRef} className="xterm-host" />
 
-        <div ref={hostRef} className="xterm-host" />
+            {/* VS Code–style ghost text: sibling overlay, not inside xterm-host which xterm.js owns */}
+            <GhostTextOverlay
+              completionText={ghostText?.completion ?? ""}
+              typedText={ghostText?.typed ?? ""}
+              visible={!!(ghostText && isPaneActive)}
+              terminalRef={terminalRef}
+              hostRef={hostRef}
+            />
+
+            <AutocompletePopup
+              candidates={autocompleteCandidates}
+              selectedIndex={autocompleteSelectedIndex}
+              onSelectIndex={(idx) => {
+                setAutocompleteSelectedIndex(idx);
+                // Sync ghost text with the hovered/selected popup item
+                const c = autocompleteCandidates[idx];
+                if (c) {
+                  const typedPortion = currentLineBufferRef.current.slice(c.replacementStart, c.replacementEnd);
+                  setGhostText({ completion: c.text, typed: typedPortion });
+                }
+              }}
+              onAcceptCandidate={(c) => {
+                handleAcceptCandidate(c);
+                setGhostText(null);
+              }}
+              position={autocompletePosition}
+              visible={autocompleteVisible && isPaneActive}
+            />
+          </div>
+
+          <AIAssistantOverlay
+            isOpen={aiOpen && isPaneActive}
+            onClose={handleCloseAIAssistant}
+            onRunCommand={handleRunAICommand}
+            onInsertCommand={handleInsertAICommand}
+            onOpenSettings={onToggleSettings}
+            initialPrompt={aiInitialPrompt}
+            initialMode={aiInitialMode}
+            diagnoseContext={aiDiagnoseContext}
+            cwd={pane.cwd || undefined}
+          />
+        </div>
       </section>
     </div>
   );
 }
+

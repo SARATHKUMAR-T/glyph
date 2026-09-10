@@ -1,8 +1,12 @@
 import type { Terminal } from "@xterm/xterm";
 import type { TerminalSemanticEvent } from "./types";
 import { formatErrorMessage, getRandomQuote } from "../supabase";
+import { AIManager } from "../ai/manager";
+import { handleAIHelpCommand, handleAIStatusCommand, handleAITestCommand } from "../ai/commands";
+import { generateCommandFromNaturalLanguage } from "../ai/assistant";
 
 export type MockShellSession = {
+
   handleData: (data: string) => void;
   dispose: () => void;
 };
@@ -134,6 +138,87 @@ export function attachMockShell(
       return;
     }
 
+    if (data === "\t") {
+      // TAB key -> Auto-completion (files, directories, commands)
+      const suggestions = [
+        "Desktop/",
+        "Documents/",
+        "Downloads/",
+        "Music/",
+        "Pictures/",
+        "Videos/",
+        "Projects/",
+        "src/",
+        "dist/",
+        "node_modules/",
+        "package.json",
+        "README.md",
+        "tsconfig.json",
+        "ai",
+        "ai status",
+        "ai test",
+        "ai help",
+        "git",
+        "git status",
+        "git commit",
+        "git push",
+        "git pull",
+        "git log",
+        "git branch",
+        "cargo",
+        "cargo build",
+        "cargo test",
+        "cargo run",
+        "npm",
+        "npm run dev",
+        "npm run build",
+        "npm test",
+        "clear",
+        "help",
+        "matrix",
+        "ls",
+        "cd",
+        "pwd",
+        "echo",
+        "cat",
+        "history",
+      ];
+
+      const parts = currentBuffer.split(" ");
+      const lastWord = parts[parts.length - 1] ?? "";
+
+      if (lastWord.length > 0) {
+        const matches = suggestions.filter((s) => s.toLowerCase().startsWith(lastWord.toLowerCase()));
+        if (matches.length === 1 && matches[0]) {
+          const completion = matches[0].slice(lastWord.length);
+          currentBuffer += completion + (matches[0].endsWith("/") ? "" : " ");
+          cursorPosition = currentBuffer.length;
+          terminal.write(completion + (matches[0].endsWith("/") ? "" : " "));
+        } else if (matches.length > 1) {
+          // Find common prefix or display matches
+          const common = matches.reduce((acc, curr) => {
+            let i = 0;
+            while (i < acc.length && i < curr.length && acc[i]?.toLowerCase() === curr[i]?.toLowerCase()) {
+              i++;
+            }
+            return acc.slice(0, i);
+          });
+
+          if (common.length > lastWord.length) {
+            const completion = common.slice(lastWord.length);
+            currentBuffer += completion;
+            cursorPosition = currentBuffer.length;
+            terminal.write(completion);
+          } else {
+            terminal.writeln("");
+            terminal.writeln(matches.map((m) => `\x1b[36m${m}\x1b[0m`).join("  "));
+            terminal.write(prompt + currentBuffer);
+          }
+        }
+      }
+      return;
+    }
+
     if (data === "\x03") {
       // CTRL + C (Cancel)
       terminal.write("^C");
@@ -162,15 +247,72 @@ export function attachMockShell(
 function executeMockCommand(cmd: string, terminal: Terminal, onComplete: () => void) {
   const parts = cmd.split(" ");
   const main = parts[0]?.toLowerCase();
+  const sub = parts[1]?.toLowerCase();
+  const normalizedCmd = cmd.trim().toLowerCase();
+  const isGlyphPrefixed = normalizedCmd.startsWith("glyph ");
+  const strippedCmd = isGlyphPrefixed ? normalizedCmd.slice(6).trim() : normalizedCmd;
+
+  if (strippedCmd === "ai" || strippedCmd === "ai help" || strippedCmd === "ai --help" || strippedCmd === "ai -h") {
+    handleAIHelpCommand((line) => terminal.writeln(line));
+    onComplete();
+    return;
+  }
+
+  if (strippedCmd === "ai status") {
+    void handleAIStatusCommand(AIManager.getInstance(), (line) => terminal.writeln(line)).finally(() =>
+      onComplete(),
+    );
+    return;
+  }
+
+  if (strippedCmd === "ai test") {
+    void handleAITestCommand(AIManager.getInstance(), (line) => terminal.writeln(line)).finally(() =>
+      onComplete(),
+    );
+    return;
+  }
+
+  // In-terminal Natural Language AI Prompting: # <prompt>, ? <prompt>, or ai <prompt>
+  if (cmd.startsWith("#") || cmd.startsWith("?") || strippedCmd.startsWith("ai ")) {
+    let query = "";
+    if (cmd.startsWith("#") || cmd.startsWith("?")) {
+      query = cmd.slice(1).trim();
+    } else if (strippedCmd.startsWith("ai ")) {
+      query = strippedCmd.slice(3).trim();
+    }
+
+    if (query.length > 0) {
+      terminal.writeln(`\x1b[38;2;255;48;48m⠋\x1b[0m \x1b[38;2;180;180;180mAsking AI: "${query}"...\x1b[0m`);
+      void generateCommandFromNaturalLanguage(query)
+        .then((generated) => {
+          terminal.writeln(`  \x1b[1;37m✨ Suggested Command:\x1b[0m`);
+          terminal.writeln(`  \x1b[1;32m${generated.command}\x1b[0m`);
+          if (generated.explanation) {
+            terminal.writeln(`  \x1b[2;37m${generated.explanation}\x1b[0m`);
+          }
+          terminal.writeln("");
+        })
+        .catch((err: unknown) => {
+          const msg = formatErrorMessage(err);
+          terminal.writeln(`\x1b[31m  AI Error: ${msg}\x1b[0m`);
+          terminal.writeln(`  \x1b[2mUse 'ai status' or press Ctrl+Shift+I to open AI Assistant.\x1b[0m`);
+        })
+        .finally(() => {
+          onComplete();
+        });
+      return;
+    }
+  }
 
   switch (main) {
+
     case "clear":
       terminal.clear();
       onComplete();
       break;
     case "help":
       terminal.writeln("\x1b[1;37mGlyph Simulated Commands:\x1b[0m");
-      terminal.writeln("  ls, pwd, whoami, uname, date, echo, history, quote, clear, help");
+      terminal.writeln("  ls, pwd, whoami, uname, date, echo, history, quote, ai, clear, help");
       terminal.writeln("  Press \x1b[38;2;255;48;48mUp / Down Arrow\x1b[0m for command history.");
       onComplete();
       break;
@@ -237,3 +379,4 @@ function executeMockCommand(cmd: string, terminal: Terminal, onComplete: () => v
       break;
   }
 }
+

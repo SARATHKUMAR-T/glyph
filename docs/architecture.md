@@ -118,6 +118,60 @@ sequenceDiagram
 
 ---
 
+## 🤖 AI Provider Subsystem Architecture
+
+Glyph provides an extensible, vendor-agnostic AI provider layer (Step 1 Foundation).
+
+```mermaid
+graph TD
+    Terminal[TerminalView / Built-in CLI] --> AIManager[AIManager (src/lib/ai/manager.ts)]
+    AIManager --> Factory[Provider Factory (src/lib/ai/factory.ts)]
+    Factory --> Interface[AIProvider Interface]
+    Interface --> Ollama[OllamaProvider (Local HTTP /api/generate)]
+    Interface --> OpenAI[OpenAICompatibleProvider (Bearer Auth /chat/completions)]
+```
+
+### Core Components
+- **`AIProvider` Interface** (`src/lib/ai/types.ts`): Standard abstraction defining `isAvailable()`, `complete()`, and optional streaming `stream()`.
+- **`OllamaProvider`** (`src/lib/ai/providers/OllamaProvider.ts`): Connects to local Ollama daemon (`http://localhost:11434`), checks installed tags, and runs completions.
+- **`OpenAICompatibleProvider`** (`src/lib/ai/providers/OpenAICompatibleProvider.ts`): Connects to any OpenAI-compatible API gateway with Bearer authentication.
+- **`AIManager`** (`src/lib/ai/manager.ts`): Coordinates provider lifecycle, timeout safety, credential resolution from environment (`GLYPH_AI_API_KEY`, `TERMINAL_AI_API_KEY`), and safe logging without credential leakage.
+- **CLI Commands** (`src/lib/ai/commands.ts`): Handles `ai status`, `ai test`, and `ai help` in the terminal emulator.
+
+---
+
+## ⚡ Local Intelligent Command Autocomplete
+
+Glyph implements a local-only, Warp-quality command autocomplete system operating at sub-20ms latency without any external AI or network dependencies.
+
+```text
+Terminal Input
+      │
+      ▼
+Completion Engine
+      │
+      ├── Command Provider ($PATH executables cache)
+      ├── Filesystem Provider (relative, absolute, ~/ paths)
+      ├── Shell Provider (builtins, common flags)
+      ├── Git Provider (subcommands & repository branches)
+      ├── History Provider (frequency & recency weighting)
+      └── Project Provider (package.json, Cargo.toml, Makefile)
+      │
+      ▼
+Deduplication & Composite Ranking
+      │
+      ▼
+Suggestion Popup UI (Warp-style near cursor)
+```
+
+### Key Keyboard Controls
+- **`Tab`**: Accepts the highlighted completion candidate.
+- **`↑ / ↓`**: Navigates through suggestions in the popup list.
+- **`Esc`**: Dismisses the suggestion popup.
+- **`Enter`**: Executes command line normally or accepts completion.
+
+---
+
 ## 📁 Key File Structure
 
 ```
@@ -126,23 +180,36 @@ glyph/
 │   ├── app/
 │   │   └── App.tsx              # Main App layout, shortcut handling, tab management
 │   ├── components/
-│   │   ├── settings/            # Settings modal & keybindings remap UI
+│   │   ├── settings/            # Settings modal, AI provider settings & keybindings remap UI
 │   │   ├── tabs/                # Tab bar & tab item component
-│   │   ├── terminal/            # TerminalView, xterm host wrapper, Matrix background
+│   │   ├── terminal/            # TerminalView, xterm host wrapper, Matrix background, AutocompletePopup
 │   │   └── window/              # Custom frameless TitleBar & WindowResizeHandles
 │   ├── hooks/                   # Custom hooks for PTY session, shortcuts, settings
 │   ├── lib/
+│   │   ├── autocomplete/        # Local Intelligent Autocomplete Engine
+│   │   │   ├── providers/       # CommandProvider, FilesystemProvider, GitProvider, HistoryProvider, ProjectProvider, ShellProvider
+│   │   │   ├── matching.ts      # Prefix and fuzzy subsequence matching with character indices
+│   │   │   ├── ranking.ts       # Composite score weighting and candidate deduplication
+│   │   │   ├── tokenizer.ts     # Shell input tokenizer & replacement range bounds
+│   │   │   ├── engine.ts        # CompletionEngine orchestrator & stale-request protection
+│   │   │   └── types.ts         # Autocomplete contracts and data models
+│   │   ├── ai/                  # AI Assistant Foundation & Side Panel
+│   │   │   ├── providers/       # OllamaProvider, OpenAICompatibleProvider
+│   │   │   ├── assistant.ts     # Natural language command parser & diagnosis
+│   │   │   ├── commands.ts      # Terminal CLI command handlers (status, test, help)
+│   │   │   └── manager.ts       # AIManager lifecycle coordinator
 │   │   └── terminal/            # xterm setup, Tauri event listeners, types
 │   └── styles/
 │       ├── nothing.css          # Design tokens, global UI styles, controls
-│       └── terminal.css         # xterm theme overrides, glowing cursors, scrollbar
+│       └── terminal.css         # xterm theme overrides, glowing cursors, autocomplete popup
 ├── src-tauri/                   # Rust Tauri Desktop Backend
 │   ├── capabilities/            # Tauri security permissions (clipboard, windowing)
 │   ├── src/
-│   │   ├── commands/            # Tauri IPC command definitions
+│   │   ├── commands/            # Tauri IPC command definitions (autocomplete, terminal, workspace)
 │   │   ├── terminal/            # PTY spawner, session manager, OSC 133 parser
 │   │   ├── lib.rs               # App entrypoint & plugin registration
 │   │   └── main.rs              # Binary main executable
 │   └── tauri.conf.json          # Tauri app manifest & window configuration
 └── package.json                 # Node dependencies & scripts
 ```
+

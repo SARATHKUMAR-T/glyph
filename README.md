@@ -68,9 +68,30 @@ with normal terminal applications rather than simulating a shell.
 OSC 133 shell integration allows Glyph to understand command boundaries
 and terminal state.
 
+### 🧠 AI Assistant & Natural Language (Warp-style)
+
+Glyph includes a native, Warp-style AI assistant and natural language command generator. AI is **completely optional and disabled by default**.
+
+Configure your preferred model provider (local **Ollama** like `qwen2.5-coder` or `llama3`, or any **OpenAI-compatible** endpoint) directly in Settings:
+
+- **AI Assistant Overlay (`Ctrl+Shift+I` / `Cmd+Shift+I`)**:
+  - Type plain English requests (e.g. *"find all .log files and delete them"*, *"kill process on port 3000"*).
+  - Press `[Enter]` to immediately execute in the active shell.
+  - Press `[Tab]` to insert into the terminal buffer for editing without running.
+  - Press `[Esc]` or `[Ctrl+Shift+I]` anytime to exit/close the assistant.
+- **In-Terminal Natural Language Prompting**:
+  - Type `# <request>`, `? <request>`, or `ai <request>` directly into the terminal prompt (e.g., `# list open ports`).
+- **AI Error Diagnosis (`Ctrl+Shift+E`)**:
+  - Automatically inspects the last failed command's exit code and output to explain what went wrong and provide the exact fix command.
+- **Built-in CLI Commands**:
+  - `ai status` — Inspect the active AI provider, model, endpoint, and connection health.
+  - `ai test` — Run a step-by-step connection test and verification completion.
+  - `ai help` — Show help and available AI commands.
+
 ------------------------------------------------------------------------
 
 ## 🎛️ Make Glyph Yours
+
 
 Glyph gives you control over the visual experience as well as the
 terminal itself.
@@ -294,7 +315,47 @@ npm run dev
 
 ------------------------------------------------------------------------
 
+## 🤖 AI Configuration Guide
+
+AI functionality is completely optional and disabled by default.
+
+### 1. Configure Local Ollama
+
+1. Install and start [Ollama](https://ollama.com/):
+   ```bash
+   ollama serve
+   ollama pull qwen2.5-coder:7b
+   ```
+2. Open Glyph Settings (`Ctrl + Shift + ,` or click Settings), expand **AI Provider**, toggle **Enable AI** to `ON`, select **Ollama (Local)**, and set model to `qwen2.5-coder:7b`.
+3. Verify connection in your terminal:
+   ```bash
+   ai status
+   ai test
+   ```
+
+### 2. Configure OpenAI-Compatible Endpoint
+
+1. Set your API key in your environment (e.g. in your `~/.bashrc` or `~/.zshrc`):
+   ```bash
+   export GLYPH_AI_API_KEY="your-api-key-here"
+   # Or: export TERMINAL_AI_API_KEY="your-api-key-here"
+   ```
+2. Open Settings, set Provider to **OpenAI Compatible**, model (e.g., `gpt-4o-mini`), and endpoint (e.g., `https://api.openai.com/v1`).
+3. Verify connection:
+   ```bash
+   ai status
+   ai test
+   ```
+
+------------------------------------------------------------------------
+
 ## ✅ Checks
+
+Run the frontend test suite:
+
+``` bash
+npm test
+```
 
 Run the frontend type check:
 
@@ -319,6 +380,7 @@ Build production packages:
 ``` bash
 npm run tauri build
 ```
+
 
 ------------------------------------------------------------------------
 

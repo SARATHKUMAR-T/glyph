@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ThemeId } from "../lib/terminal/themes";
+import type { AIConfig } from "../lib/ai/types";
+import { DEFAULT_AI_CONFIG } from "../lib/ai/config";
+import { AIManager } from "../lib/ai/manager";
 
 export type MatrixStyle = "static-grid" | "nothing-grid" | "matrix-rain";
 export type MatrixSpeed = "slow" | "normal" | "fast";
@@ -16,6 +19,7 @@ export type TerminalSettings = {
   cursorBlink: boolean;
   fontSize: number;
   showPerformanceBar: boolean;
+  ai: AIConfig;
 };
 
 const DEFAULT_SETTINGS: TerminalSettings = {
@@ -29,6 +33,7 @@ const DEFAULT_SETTINGS: TerminalSettings = {
   cursorBlink: true,
   fontSize: 14,
   showPerformanceBar: true,
+  ai: DEFAULT_AI_CONFIG,
 };
 
 const STORAGE_KEY = "glyph_terminal_settings_v8";
@@ -43,11 +48,15 @@ export function useTerminalSettings() {
         if ((parsed as Record<string, unknown>).matrixStyle === "red-pulse") {
           parsed.matrixStyle = "matrix-rain";
         }
-        return { ...DEFAULT_SETTINGS, ...parsed };
+        const mergedAi = { ...DEFAULT_AI_CONFIG, ...(parsed.ai || {}) };
+        const merged = { ...DEFAULT_SETTINGS, ...parsed, ai: mergedAi };
+        AIManager.getInstance().updateConfig(merged.ai);
+        return merged;
       }
     } catch {
       // Fall back to defaults
     }
+    AIManager.getInstance().updateConfig(DEFAULT_SETTINGS.ai);
     return DEFAULT_SETTINGS;
   });
 
@@ -57,10 +66,19 @@ export function useTerminalSettings() {
     } catch {
       // Ignore storage write errors
     }
+    AIManager.getInstance().updateConfig(settings.ai);
   }, [settings]);
 
   const updateSettings = useCallback((patch: Partial<TerminalSettings>) => {
-    setSettings((prev) => ({ ...prev, ...patch }));
+    setSettings((prev) => {
+      const updated = {
+        ...prev,
+        ...patch,
+        ai: patch.ai ? { ...prev.ai, ...patch.ai } : prev.ai,
+      };
+      AIManager.getInstance().updateConfig(updated.ai);
+      return updated;
+    });
   }, []);
 
   return {
@@ -68,3 +86,4 @@ export function useTerminalSettings() {
     updateSettings,
   };
 }
+

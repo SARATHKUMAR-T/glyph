@@ -3,6 +3,9 @@ mod events;
 mod terminal;
 mod workspace;
 
+use commands::autocomplete::{
+    get_fs_completions, get_git_completions, get_path_executables, get_project_completions,
+};
 use commands::system::{get_system_perf_stats, SystemMonitorState};
 use commands::terminal::{
     close_terminal, create_terminal, get_terminal_cwd, list_sessions, open_url, resize_terminal,
@@ -34,7 +37,11 @@ pub fn run() {
             get_workspaces,
             get_workspace,
             save_workspace,
-            delete_workspace
+            delete_workspace,
+            get_path_executables,
+            get_fs_completions,
+            get_git_completions,
+            get_project_completions
         ])
         .setup(move |app| {
             if let Ok(app_dir) = app.path().app_data_dir() {

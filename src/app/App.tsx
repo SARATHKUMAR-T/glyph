@@ -433,7 +433,14 @@ export function App() {
       setSaveCurrentWorkspaceOpen(true);
       setSettingsOpen(false);
     },
+    onToggleAI: () => {
+      window.dispatchEvent(new CustomEvent("glyph:toggle-ai"));
+    },
+    onExplainErrorAI: () => {
+      window.dispatchEvent(new CustomEvent("glyph:explain-ai"));
+    },
   });
+
 
   const currentExpandedTab = tabs.find((t) => t.clientId === expandedPane?.tabId);
   const expandedPaneModel =

@@ -565,6 +565,8 @@ export function Settings({
           </div>
         )}
       </div>
+
     </aside>
   );
 }
+

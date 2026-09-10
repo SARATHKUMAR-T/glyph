@@ -14,6 +14,8 @@ type ShortcutHandlers = {
   onToggleSettings: () => void;
   onOpenWorkspace?: () => void;
   onSaveWorkspace?: () => void;
+  onToggleAI?: () => void;
+  onExplainErrorAI?: () => void;
 };
 
 export function useKeyboardShortcuts({
@@ -29,7 +31,10 @@ export function useKeyboardShortcuts({
   onToggleSettings,
   onOpenWorkspace,
   onSaveWorkspace,
+  onToggleAI,
+  onExplainErrorAI,
 }: ShortcutHandlers) {
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Don't intercept when user is typing inside text input fields
@@ -114,6 +119,20 @@ export function useKeyboardShortcuts({
         onSaveWorkspace?.();
         return;
       }
+
+      if (keybindings.toggle_ai && matchesKeyCombo(event, keybindings.toggle_ai)) {
+        event.preventDefault();
+        event.stopPropagation();
+        onToggleAI?.();
+        return;
+      }
+
+      if (keybindings.explain_error_ai && matchesKeyCombo(event, keybindings.explain_error_ai)) {
+        event.preventDefault();
+        event.stopPropagation();
+        onExplainErrorAI?.();
+        return;
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown, { capture: true });
@@ -131,5 +150,8 @@ export function useKeyboardShortcuts({
     onToggleSettings,
     onOpenWorkspace,
     onSaveWorkspace,
+    onToggleAI,
+    onExplainErrorAI,
   ]);
 }
+

@@ -1,7 +1,7 @@
 {
   "name": "Glyph-terminal",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.3.0",
   "type": "module",
   "description": "A Nothing-inspired Linux terminal emulator built with Tauri, Rust, React, TypeScript, xterm.js, and portable-pty.",
   "scripts": {
@@ -10,7 +10,8 @@
     "preview": "vite preview --host 127.0.0.1 --port 1421",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/lib/knowledge/__tests__/*.test.ts src/lib/autocomplete/__tests__/*.test.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
@@ -26,9 +27,11 @@
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.4",
+    "@types/node": "^26.5.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "6.0.4",
+    "tsx": "^4.23.13",
     "typescript": "^5",
     "vite": "8.1.5"
   }
