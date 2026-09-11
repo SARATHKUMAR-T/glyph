@@ -1,7 +1,7 @@
 use std::io::{ErrorKind, Read};
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tauri::{AppHandle, Emitter};
 
@@ -15,12 +15,19 @@ use super::session::TerminalSession;
 
 type SessionMap = Arc<Mutex<std::collections::HashMap<String, TerminalSession>>>;
 
+const OUTPUT_BATCH_WINDOW: Duration = Duration::from_millis(8);
+const OUTPUT_BATCH_MAX_BYTES: usize = 64 * 1024;
+const OUTPUT_QUEUE_CAPACITY: usize = 256;
+
 pub fn spawn_reader_thread(
     app: AppHandle,
     session_id: String,
     mut reader: Box<dyn Read + Send>,
     _sessions: SessionMap,
 ) {
+    let (output_sender, output_receiver) = mpsc::sync_channel(OUTPUT_QUEUE_CAPACITY);
+    spawn_output_thread(app.clone(), session_id.clone(), output_receiver);
+
     thread::spawn(move || {
         let mut parser = Osc133Parser::default();
         let mut buffer = [0_u8; 8192];
@@ -52,13 +59,9 @@ pub fn spawn_reader_thread(
                             );
                         }
 
-                        let _ = app.emit(
-                            OUTPUT_EVENT,
-                            TerminalOutputEvent {
-                                session_id: session_id.clone(),
-                                data,
-                            },
-                        );
+                        if output_sender.send(data).is_err() {
+                            break;
+                        }
                     }
                 }
                 Err(error) if error.kind() == ErrorKind::Interrupted => continue,
@@ -74,6 +77,40 @@ pub fn spawn_reader_thread(
                     break;
                 }
             }
+        }
+    });
+}
+
+fn spawn_output_thread(
+    app: AppHandle,
+    session_id: String,
+    receiver: mpsc::Receiver<String>,
+) {
+    thread::spawn(move || {
+        while let Ok(first_chunk) = receiver.recv() {
+            let mut data = first_chunk;
+            let deadline = Instant::now() + OUTPUT_BATCH_WINDOW;
+
+            while data.len() < OUTPUT_BATCH_MAX_BYTES {
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                if remaining.is_zero() {
+                    break;
+                }
+
+                match receiver.recv_timeout(remaining) {
+                    Ok(chunk) => data.push_str(&chunk),
+                    Err(mpsc::RecvTimeoutError::Timeout) => break,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                }
+            }
+
+            let _ = app.emit(
+                OUTPUT_EVENT,
+                TerminalOutputEvent {
+                    session_id: session_id.clone(),
+                    data,
+                },
+            );
         }
     });
 }

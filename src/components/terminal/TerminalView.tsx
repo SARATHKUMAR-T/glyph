@@ -32,6 +32,7 @@ import { getTheme, DEFAULT_THEME_ID } from "../../lib/terminal/themes";
 import { TerminalBlock } from "./TerminalBlock";
 
 const pendingOutputMap = new Map<string, string[]>();
+const MAX_OUTPUT_WRITE_CHARS = 64 * 1024;
 
 type TerminalViewProps = {
   active: boolean;
@@ -283,6 +284,9 @@ export function TerminalView({
     const disposables: IDisposable[] = [];
     const unlisteners: Array<() => void> = [];
     let resizeFrame = 0;
+    let outputFrame = 0;
+    let outputWriteInFlight = false;
+    let outputQueue = "";
     let disposed = false;
     let inputLineBuffer = "";
 
@@ -293,6 +297,45 @@ export function TerminalView({
     terminal.loadAddon(searchAddon);
     terminal.loadAddon(webLinksAddon);
     terminal.open(host);
+
+    function flushTerminalOutput() {
+      outputFrame = 0;
+      if (disposed || outputWriteInFlight || !outputQueue) {
+        return;
+      }
+
+      let batchEnd = Math.min(outputQueue.length, MAX_OUTPUT_WRITE_CHARS);
+      if (
+        batchEnd < outputQueue.length &&
+        /[\uD800-\uDBFF]/.test(outputQueue.charAt(batchEnd - 1)) &&
+        /[\uDC00-\uDFFF]/.test(outputQueue.charAt(batchEnd))
+      ) {
+        batchEnd -= 1;
+      }
+
+      const batch = outputQueue.slice(0, batchEnd);
+      outputQueue = outputQueue.slice(batchEnd);
+      outputWriteInFlight = true;
+      terminal.write(batch, () => {
+        outputWriteInFlight = false;
+        if (!disposed && outputQueue) {
+          outputFrame = requestAnimationFrame(flushTerminalOutput);
+        }
+      });
+    }
+
+    const queueTerminalOutput = (data: string) => {
+      if (disposed || !data) {
+        return;
+      }
+
+      outputQueue += data;
+      if (outputWriteInFlight || outputFrame) {
+        return;
+      }
+
+      outputFrame = requestAnimationFrame(flushTerminalOutput);
+    };
 
     // Track search result count for UI badge
     disposables.push(
@@ -384,10 +427,13 @@ export function TerminalView({
           if (!text) return;
           const sessionId = sessionIdRef.current;
           if (sessionId && isTauriRuntime()) {
-            // Use xterm's paste() so bracketed paste mode (\x1b[200~...\x1b[201~) is
-            // automatically applied when the active program (e.g. nano) has enabled it.
-            // This preserves newlines and document structure in full-screen editors.
-            terminalRef.current?.paste(text);
+            // Send the clipboard as one ordered PTY write. This avoids turning a long
+            // prompt into hundreds of IPC calls while retaining bracketed-paste support.
+            const pasteData = terminal.modes.bracketedPasteMode
+              ? `\x1b[200~${text}\x1b[201~`
+              : text;
+            window.dispatchEvent(new CustomEvent("glyph:terminal-activity"));
+            await writeTerminalData(sessionId, pasteData);
           } else if (mockSessionRef.current) {
             mockSessionRef.current.handleData(text);
           }
@@ -515,7 +561,7 @@ export function TerminalView({
         const dataUnlisten = await listenTerminalOutput((evt) => {
           const currentId = sessionIdRef.current;
           if (currentId && evt.sessionId === currentId) {
-            terminal.write(evt.data);
+            queueTerminalOutput(evt.data);
           } else {
             const list = pendingOutputMap.get(evt.sessionId) ?? [];
             list.push(evt.data);
@@ -632,7 +678,7 @@ export function TerminalView({
           const sessionPending = pendingOutputMap.get(assignedId);
           if (sessionPending && sessionPending.length > 0) {
             for (const chunk of sessionPending) {
-              terminal.write(chunk);
+              queueTerminalOutput(chunk);
             }
             pendingOutputMap.delete(assignedId);
           }
@@ -692,6 +738,8 @@ export function TerminalView({
       }
       cancelAnimationFrame(resizeFrame);
       resizeObserver.disconnect();
+      cancelAnimationFrame(outputFrame);
+      outputQueue = "";
       if (mockSessionRef.current) {
         mockSessionRef.current.dispose();
         mockSessionRef.current = null;
