@@ -10,7 +10,9 @@
     "preview": "vite preview --host 127.0.0.1 --port 1421",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "gen:corpus": "node scripts/gen-corpus.mjs",
+    "test:grid-diff": "cargo test --manifest-path src-tauri/Cargo.toml --test grid_diff && node scripts/grid-diff.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3",
@@ -29,6 +31,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "6.0.4",
+    "@xterm/headless": "^6.0.0",
     "typescript": "^5",
     "vite": "8.1.5"
   }

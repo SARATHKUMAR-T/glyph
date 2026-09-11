@@ -1,8 +1,12 @@
 mod commands;
 mod events;
-mod terminal;
+pub mod terminal;
 mod workspace;
 
+use commands::engine::{
+    engine_attach_channel, engine_clear_selection, engine_scrollback_query,
+    engine_search, engine_selection_range, engine_set_scroll, engine_status,
+};
 use commands::system::{get_system_perf_stats, SystemMonitorState};
 use commands::terminal::{
     close_terminal, create_terminal, get_terminal_cwd, list_sessions, open_url, resize_terminal,
@@ -10,6 +14,7 @@ use commands::terminal::{
 };
 use commands::workspace::{delete_workspace, get_workspace, get_workspaces, save_workspace};
 use tauri::Manager;
+use terminal::engine::EngineManager;
 use terminal::manager::TerminalManager;
 use workspace::manager::WorkspaceManager;
 
@@ -20,6 +25,7 @@ pub fn run() {
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .manage(TerminalManager::default())
+        .manage(EngineManager::default())
         .manage(SystemMonitorState::default())
         .manage(workspace_manager)
         .invoke_handler(tauri::generate_handler![
@@ -34,7 +40,14 @@ pub fn run() {
             get_workspaces,
             get_workspace,
             save_workspace,
-            delete_workspace
+            delete_workspace,
+            engine_status,
+            engine_attach_channel,
+            engine_scrollback_query,
+            engine_set_scroll,
+            engine_selection_range,
+            engine_clear_selection,
+            engine_search
         ])
         .setup(move |app| {
             if let Ok(app_dir) = app.path().app_data_dir() {

@@ -11,6 +11,8 @@ import type {
 } from "../../lib/terminal/types";
 import type { KeybindingsConfig } from "../../hooks/useKeybindings";
 import type { TerminalSettings } from "../../hooks/useTerminalSettings";
+import { useEngineStatus } from "../../hooks/useEngineStatus";
+import { GlyphEngineTerminalView } from "./GlyphEngineTerminalView";
 import { TerminalView } from "./TerminalView";
 
 type TerminalPanePortalsProps = {
@@ -97,6 +99,10 @@ export function TerminalPanePortals({
   // These are never recreated for a given paneId, which means
   // the TerminalView rendered inside (via createPortal) is never unmounted.
   const containersRef = useRef(new Map<string, HTMLDivElement>());
+  // A/B flag: when the backend was started with GLYPH_RUST_ENGINE=1, every
+  // pane renders through the experimental Canvas2D renderer instead of
+  // xterm.js. See useEngineStatus for why this is fetched once and cached.
+  const engineEnabled = useEngineStatus();
 
   // Lazily create containers for any new panes.
   // This is safe during render because we're only creating detached
@@ -175,8 +181,9 @@ export function TerminalPanePortals({
         const container = containersRef.current.get(pane.paneId);
         if (!container) return null;
         const isPaneActive = pane.paneId === activePaneId;
+        const Renderer = engineEnabled ? GlyphEngineTerminalView : TerminalView;
         return createPortal(
-          <TerminalView
+          <Renderer
             key={pane.paneId}
             active={activeTab}
             blocks={blocksByPane[pane.paneId] ?? []}

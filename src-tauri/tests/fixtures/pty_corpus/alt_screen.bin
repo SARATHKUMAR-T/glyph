@@ -1,0 +1,4 @@
+primary line 1
+primary line 2
+[?1049h[2J[Halt screen content
+like vim or htop[?1049lback to primary

@@ -28,4 +28,8 @@ tracing = "0.1"
 uuid = { version = "1", features = ["v4", "serde"] }
 open = "5"
 sysinfo = "0.36.1"
+# Rust-owned VT parser + grid state for the experimental WebGL2 renderer
+# path (see src/terminal/engine). Kept behind the GLYPH_RUST_ENGINE runtime
+# flag; xterm.js remains the default renderer.
+alacritty_terminal = "0.26.0"
 

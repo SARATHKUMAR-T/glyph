@@ -33,7 +33,7 @@ import { TerminalBlock } from "./TerminalBlock";
 
 const pendingOutputMap = new Map<string, string[]>();
 
-type TerminalViewProps = {
+export type TerminalViewProps = {
   active: boolean;
   isPaneActive: boolean;
   isSplit?: boolean;

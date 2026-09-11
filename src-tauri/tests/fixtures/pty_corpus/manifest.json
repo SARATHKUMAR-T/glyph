@@ -1,0 +1,63 @@
+[
+  {
+    "name": "basic_text",
+    "file": "basic_text.bin",
+    "cols": 80,
+    "rows": 24
+  },
+  {
+    "name": "sgr_colors",
+    "file": "sgr_colors.bin",
+    "cols": 80,
+    "rows": 10
+  },
+  {
+    "name": "cursor_moves",
+    "file": "cursor_moves.bin",
+    "cols": 40,
+    "rows": 10
+  },
+  {
+    "name": "wide_cjk_emoji",
+    "file": "wide_cjk_emoji.bin",
+    "cols": 40,
+    "rows": 6,
+    "knownIssue": "alacritty_terminal's unicode-width crate classifies some emoji as single-width where xterm.js classifies them double-width — a known cross-engine Unicode table disagreement, not a parser bug. See BENCH.md."
+  },
+  {
+    "name": "wrap_reflow",
+    "file": "wrap_reflow.bin",
+    "cols": 40,
+    "rows": 6
+  },
+  {
+    "name": "alt_screen",
+    "file": "alt_screen.bin",
+    "cols": 40,
+    "rows": 8
+  },
+  {
+    "name": "scrollback",
+    "file": "scrollback.bin",
+    "cols": 40,
+    "rows": 10
+  },
+  {
+    "name": "resize_reflow",
+    "file": "resize_reflow.bin",
+    "cols": 40,
+    "rows": 8,
+    "resizeTo": {
+      "cols": 20,
+      "rows": 8
+    },
+    "postFile": "resize_reflow.post.bin",
+    "knownIssue": "KNOWN BUG in alacritty_terminal 0.26.0's Grid::shrink_columns reflow: drops a whole row of content when a wrapped line must split across 3+ new rows on shrink. See GridEngine's resize_tests module in grid_engine.rs for the minimal repro and detail. Not a bug in this test or in the Rust<->JS comparison — xterm.js reflows correctly."
+  },
+  {
+    "name": "osc133_prompts",
+    "file": "osc133_prompts.bin",
+    "cols": 60,
+    "rows": 10
+  }
+]

@@ -278,6 +278,28 @@
   background-color: transparent !important;
 }
 
+/* Experimental Rust-engine Canvas2D renderer (Phase 2, GLYPH_RUST_ENGINE=1) */
+.glyph-canvas-host {
+  display: block;
+}
+
+.glyph-canvas-host canvas {
+  display: block;
+}
+
+.glyph-canvas-input-sink {
+  position: absolute;
+  opacity: 0;
+  left: -9999px;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  resize: none;
+  pointer-events: none;
+}
+
 .xterm-screen {
   margin-right: 0 !important;
 }
