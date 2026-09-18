@@ -1,5 +1,3 @@
-import type { ITheme } from "@xterm/xterm";
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type ThemeCategory = "dark" | "light" | "specialty";
@@ -23,6 +21,20 @@ export type GlyphCssVars = {
   "--glyph-accent-dim": string;
   /** Accent glow rgba string */
   "--glyph-accent-glow": string;
+  /** Text-selection fill — noticeably stronger than `--glyph-accent-dim`
+   * (which is tuned for subtle hover states, not a highlight you're meant
+   * to read at a glance) since it's painted as a real background layer
+   * behind the glyphs, the same way selection reads in a normal terminal
+   * emulator (Alacritty, iTerm2, VS Code). */
+  "--glyph-selection-bg": string;
+  /** Search-match highlight background — a solid, high-contrast
+   * "highlighter" color distinct from `--glyph-accent` (which many themes
+   * already spend on the cursor/borders/glow), so a found match reads
+   * unmistakably instead of blending into the rest of the UI's accent. */
+  "--glyph-search-match": string;
+  /** Ink color drawn over `--glyph-search-match` — chosen per theme for
+   * contrast against that specific highlight color, not assumed. */
+  "--glyph-search-match-fg": string;
   /** Primary border */
   "--glyph-line": string;
   /** Strong border */
@@ -51,8 +63,16 @@ export type GlyphTheme = {
   defaultDotColor: string;
   /** CSS custom property overrides applied to <html> */
   cssVars: GlyphCssVars;
-  /** Full xterm.js ITheme palette */
-  xtermTheme: ITheme;
+  /** The 16 ANSI terminal colors (Black..BrightWhite), pushed to the Rust
+   * grid engine via `engine_set_palette` so `ls --color`, vim, etc. follow
+   * the active theme. Terminal foreground/cursor reuse `--glyph-fg`/
+   * `--glyph-accent` above; terminal background stays transparent (so the
+   * app's own background shows through) except for "light" category
+   * themes, which use `--glyph-bg` opaque — see `themeToEnginePalette`. */
+  ansi16: [
+    string, string, string, string, string, string, string, string,
+    string, string, string, string, string, string, string, string,
+  ];
 };
 
 export type ThemeId =
@@ -88,6 +108,9 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#ff3030",
       "--glyph-accent-dim": "rgba(255, 48, 48, 0.18)",
       "--glyph-accent-glow": "rgba(255, 48, 48, 0.45)",
+      "--glyph-selection-bg": "rgba(255, 48, 48, 0.40)",
+      "--glyph-search-match": "#ffcc00",
+      "--glyph-search-match-fg": "#040406",
       "--glyph-line": "rgba(255, 255, 255, 0.12)",
       "--glyph-line-strong": "rgba(255, 255, 255, 0.22)",
       "--glyph-shadow": "rgba(0, 0, 0, 0.48)",
@@ -96,29 +119,7 @@ const themes: GlyphTheme[] = [
       "--glyph-dot-size": "20px 20px",
       "--glyph-color-scheme": "dark",
     },
-    xtermTheme: {
-      background: "#00000000",
-      foreground: "#f5f5f5",
-      cursor: "#ff3030",
-      cursorAccent: "#000000",
-      selectionBackground: "rgba(255, 48, 48, 0.35)",
-      black: "#000000",
-      red: "#d71921",
-      green: "#b6f2bd",
-      yellow: "#f3e7a1",
-      blue: "#9cc9ff",
-      magenta: "#e4b2ff",
-      cyan: "#9ee7e5",
-      white: "#f5f5f5",
-      brightBlack: "#777777",
-      brightRed: "#ff3030",
-      brightGreen: "#d2ffd6",
-      brightYellow: "#fff4b8",
-      brightBlue: "#b8dcff",
-      brightMagenta: "#f0caff",
-      brightCyan: "#c1fffb",
-      brightWhite: "#ffffff",
-    },
+    ansi16: ["#000000", "#d71921", "#b6f2bd", "#f3e7a1", "#9cc9ff", "#e4b2ff", "#9ee7e5", "#f5f5f5", "#777777", "#ff3030", "#d2ffd6", "#fff4b8", "#b8dcff", "#f0caff", "#c1fffb", "#ffffff"],
   },
 
   // ── 2. Tokyo Night ───────────────────────────────────────────────────────
@@ -139,6 +140,9 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#7aa2f7",
       "--glyph-accent-dim": "rgba(122, 162, 247, 0.18)",
       "--glyph-accent-glow": "rgba(122, 162, 247, 0.4)",
+      "--glyph-selection-bg": "rgba(122, 162, 247, 0.40)",
+      "--glyph-search-match": "#e0af68",
+      "--glyph-search-match-fg": "#16161e",
       "--glyph-line": "rgba(255, 255, 255, 0.08)",
       "--glyph-line-strong": "rgba(255, 255, 255, 0.16)",
       "--glyph-shadow": "rgba(0, 0, 0, 0.55)",
@@ -147,29 +151,7 @@ const themes: GlyphTheme[] = [
       "--glyph-dot-size": "20px 20px",
       "--glyph-color-scheme": "dark",
     },
-    xtermTheme: {
-      background: "#00000000",
-      foreground: "#c0caf5",
-      cursor: "#7aa2f7",
-      cursorAccent: "#1a1b2e",
-      selectionBackground: "rgba(122, 162, 247, 0.3)",
-      black: "#15161e",
-      red: "#f7768e",
-      green: "#9ece6a",
-      yellow: "#e0af68",
-      blue: "#7aa2f7",
-      magenta: "#bb9af7",
-      cyan: "#7dcfff",
-      white: "#a9b1d6",
-      brightBlack: "#414868",
-      brightRed: "#f7768e",
-      brightGreen: "#9ece6a",
-      brightYellow: "#e0af68",
-      brightBlue: "#7aa2f7",
-      brightMagenta: "#bb9af7",
-      brightCyan: "#7dcfff",
-      brightWhite: "#c0caf5",
-    },
+    ansi16: ["#15161e", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#a9b1d6", "#414868", "#f7768e", "#9ece6a", "#e0af68", "#7aa2f7", "#bb9af7", "#7dcfff", "#c0caf5"],
   },
 
   // ── 3. Dracula ───────────────────────────────────────────────────────────
@@ -190,6 +172,9 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#ff79c6",
       "--glyph-accent-dim": "rgba(255, 121, 198, 0.18)",
       "--glyph-accent-glow": "rgba(255, 121, 198, 0.4)",
+      "--glyph-selection-bg": "rgba(255, 121, 198, 0.40)",
+      "--glyph-search-match": "#f1fa8c",
+      "--glyph-search-match-fg": "#21222c",
       "--glyph-line": "rgba(255, 255, 255, 0.08)",
       "--glyph-line-strong": "rgba(255, 255, 255, 0.15)",
       "--glyph-shadow": "rgba(0, 0, 0, 0.5)",
@@ -198,29 +183,7 @@ const themes: GlyphTheme[] = [
       "--glyph-dot-size": "20px 20px",
       "--glyph-color-scheme": "dark",
     },
-    xtermTheme: {
-      background: "#00000000",
-      foreground: "#f8f8f2",
-      cursor: "#ff79c6",
-      cursorAccent: "#282a36",
-      selectionBackground: "rgba(189, 147, 249, 0.3)",
-      black: "#21222c",
-      red: "#ff5555",
-      green: "#50fa7b",
-      yellow: "#f1fa8c",
-      blue: "#bd93f9",
-      magenta: "#ff79c6",
-      cyan: "#8be9fd",
-      white: "#f8f8f2",
-      brightBlack: "#6272a4",
-      brightRed: "#ff6e6e",
-      brightGreen: "#69ff94",
-      brightYellow: "#ffffa5",
-      brightBlue: "#d6acff",
-      brightMagenta: "#ff92df",
-      brightCyan: "#a4ffff",
-      brightWhite: "#ffffff",
-    },
+    ansi16: ["#21222c", "#ff5555", "#50fa7b", "#f1fa8c", "#bd93f9", "#ff79c6", "#8be9fd", "#f8f8f2", "#6272a4", "#ff6e6e", "#69ff94", "#ffffa5", "#d6acff", "#ff92df", "#a4ffff", "#ffffff"],
   },
 
   // ── 4. Solarized Dark ────────────────────────────────────────────────────
@@ -241,6 +204,9 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#268bd2",
       "--glyph-accent-dim": "rgba(38, 139, 210, 0.18)",
       "--glyph-accent-glow": "rgba(38, 139, 210, 0.4)",
+      "--glyph-selection-bg": "rgba(38, 139, 210, 0.40)",
+      "--glyph-search-match": "#b58900",
+      "--glyph-search-match-fg": "#002b36",
       "--glyph-line": "rgba(255, 255, 255, 0.08)",
       "--glyph-line-strong": "rgba(255, 255, 255, 0.14)",
       "--glyph-shadow": "rgba(0, 0, 0, 0.5)",
@@ -249,29 +215,7 @@ const themes: GlyphTheme[] = [
       "--glyph-dot-size": "20px 20px",
       "--glyph-color-scheme": "dark",
     },
-    xtermTheme: {
-      background: "#00000000",
-      foreground: "#839496",
-      cursor: "#268bd2",
-      cursorAccent: "#002b36",
-      selectionBackground: "rgba(38, 139, 210, 0.3)",
-      black: "#073642",
-      red: "#dc322f",
-      green: "#859900",
-      yellow: "#b58900",
-      blue: "#268bd2",
-      magenta: "#d33682",
-      cyan: "#2aa198",
-      white: "#eee8d5",
-      brightBlack: "#002b36",
-      brightRed: "#cb4b16",
-      brightGreen: "#586e75",
-      brightYellow: "#657b83",
-      brightBlue: "#839496",
-      brightMagenta: "#6c71c4",
-      brightCyan: "#93a1a1",
-      brightWhite: "#fdf6e3",
-    },
+    ansi16: ["#073642", "#dc322f", "#859900", "#b58900", "#268bd2", "#d33682", "#2aa198", "#eee8d5", "#002b36", "#cb4b16", "#586e75", "#657b83", "#839496", "#6c71c4", "#93a1a1", "#fdf6e3"],
   },
 
   // ── 5. One Dark ──────────────────────────────────────────────────────────
@@ -292,6 +236,9 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#61afef",
       "--glyph-accent-dim": "rgba(97, 175, 239, 0.18)",
       "--glyph-accent-glow": "rgba(97, 175, 239, 0.4)",
+      "--glyph-selection-bg": "rgba(97, 175, 239, 0.40)",
+      "--glyph-search-match": "#e5c07b",
+      "--glyph-search-match-fg": "#21252b",
       "--glyph-line": "rgba(255, 255, 255, 0.08)",
       "--glyph-line-strong": "rgba(255, 255, 255, 0.14)",
       "--glyph-shadow": "rgba(0, 0, 0, 0.5)",
@@ -300,29 +247,7 @@ const themes: GlyphTheme[] = [
       "--glyph-dot-size": "20px 20px",
       "--glyph-color-scheme": "dark",
     },
-    xtermTheme: {
-      background: "#00000000",
-      foreground: "#abb2bf",
-      cursor: "#61afef",
-      cursorAccent: "#282c34",
-      selectionBackground: "rgba(97, 175, 239, 0.3)",
-      black: "#282c34",
-      red: "#e06c75",
-      green: "#98c379",
-      yellow: "#e5c07b",
-      blue: "#61afef",
-      magenta: "#c678dd",
-      cyan: "#56b6c2",
-      white: "#abb2bf",
-      brightBlack: "#5c6370",
-      brightRed: "#e06c75",
-      brightGreen: "#98c379",
-      brightYellow: "#e5c07b",
-      brightBlue: "#61afef",
-      brightMagenta: "#c678dd",
-      brightCyan: "#56b6c2",
-      brightWhite: "#ffffff",
-    },
+    ansi16: ["#282c34", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#abb2bf", "#5c6370", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#ffffff"],
   },
 
   // ── 6. Nord ──────────────────────────────────────────────────────────────
@@ -343,6 +268,9 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#88c0d0",
       "--glyph-accent-dim": "rgba(136, 192, 208, 0.18)",
       "--glyph-accent-glow": "rgba(136, 192, 208, 0.4)",
+      "--glyph-selection-bg": "rgba(136, 192, 208, 0.40)",
+      "--glyph-search-match": "#ebcb8b",
+      "--glyph-search-match-fg": "#2e3440",
       "--glyph-line": "rgba(255, 255, 255, 0.08)",
       "--glyph-line-strong": "rgba(255, 255, 255, 0.14)",
       "--glyph-shadow": "rgba(0, 0, 0, 0.45)",
@@ -351,29 +279,7 @@ const themes: GlyphTheme[] = [
       "--glyph-dot-size": "20px 20px",
       "--glyph-color-scheme": "dark",
     },
-    xtermTheme: {
-      background: "#00000000",
-      foreground: "#d8dee9",
-      cursor: "#88c0d0",
-      cursorAccent: "#2e3440",
-      selectionBackground: "rgba(136, 192, 208, 0.3)",
-      black: "#3b4252",
-      red: "#bf616a",
-      green: "#a3be8c",
-      yellow: "#ebcb8b",
-      blue: "#81a1c1",
-      magenta: "#b48ead",
-      cyan: "#88c0d0",
-      white: "#e5e9f0",
-      brightBlack: "#4c566a",
-      brightRed: "#bf616a",
-      brightGreen: "#a3be8c",
-      brightYellow: "#ebcb8b",
-      brightBlue: "#81a1c1",
-      brightMagenta: "#b48ead",
-      brightCyan: "#8fbcbb",
-      brightWhite: "#eceff4",
-    },
+    ansi16: ["#3b4252", "#bf616a", "#a3be8c", "#ebcb8b", "#81a1c1", "#b48ead", "#88c0d0", "#e5e9f0", "#4c566a", "#bf616a", "#a3be8c", "#ebcb8b", "#81a1c1", "#b48ead", "#8fbcbb", "#eceff4"],
   },
 
   // ── 7. Catppuccin Mocha ──────────────────────────────────────────────────
@@ -394,6 +300,9 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#cba6f7",
       "--glyph-accent-dim": "rgba(203, 166, 247, 0.18)",
       "--glyph-accent-glow": "rgba(203, 166, 247, 0.4)",
+      "--glyph-selection-bg": "rgba(203, 166, 247, 0.40)",
+      "--glyph-search-match": "#f9e2af",
+      "--glyph-search-match-fg": "#181825",
       "--glyph-line": "rgba(255, 255, 255, 0.07)",
       "--glyph-line-strong": "rgba(255, 255, 255, 0.13)",
       "--glyph-shadow": "rgba(0, 0, 0, 0.5)",
@@ -402,29 +311,7 @@ const themes: GlyphTheme[] = [
       "--glyph-dot-size": "20px 20px",
       "--glyph-color-scheme": "dark",
     },
-    xtermTheme: {
-      background: "#00000000",
-      foreground: "#cdd6f4",
-      cursor: "#cba6f7",
-      cursorAccent: "#1e1e2e",
-      selectionBackground: "rgba(203, 166, 247, 0.3)",
-      black: "#45475a",
-      red: "#f38ba8",
-      green: "#a6e3a1",
-      yellow: "#f9e2af",
-      blue: "#89b4fa",
-      magenta: "#cba6f7",
-      cyan: "#89dceb",
-      white: "#bac2de",
-      brightBlack: "#585b70",
-      brightRed: "#f38ba8",
-      brightGreen: "#a6e3a1",
-      brightYellow: "#f9e2af",
-      brightBlue: "#89b4fa",
-      brightMagenta: "#cba6f7",
-      brightCyan: "#89dceb",
-      brightWhite: "#a6adc8",
-    },
+    ansi16: ["#45475a", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#cba6f7", "#89dceb", "#bac2de", "#585b70", "#f38ba8", "#a6e3a1", "#f9e2af", "#89b4fa", "#cba6f7", "#89dceb", "#a6adc8"],
   },
 
   // ── 8. Solarized Light ───────────────────────────────────────────────────
@@ -445,6 +332,9 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#268bd2",
       "--glyph-accent-dim": "rgba(38, 139, 210, 0.14)",
       "--glyph-accent-glow": "rgba(38, 139, 210, 0.3)",
+      "--glyph-selection-bg": "rgba(38, 139, 210, 0.30)",
+      "--glyph-search-match": "#f5d76e",
+      "--glyph-search-match-fg": "#002b36",
       "--glyph-line": "rgba(0, 0, 0, 0.1)",
       "--glyph-line-strong": "rgba(0, 0, 0, 0.18)",
       "--glyph-shadow": "rgba(0, 0, 0, 0.12)",
@@ -453,29 +343,7 @@ const themes: GlyphTheme[] = [
       "--glyph-dot-size": "20px 20px",
       "--glyph-color-scheme": "light",
     },
-    xtermTheme: {
-      background: "#fdf6e3",
-      foreground: "#657b83",
-      cursor: "#268bd2",
-      cursorAccent: "#fdf6e3",
-      selectionBackground: "rgba(38, 139, 210, 0.25)",
-      black: "#073642",
-      red: "#dc322f",
-      green: "#859900",
-      yellow: "#b58900",
-      blue: "#268bd2",
-      magenta: "#d33682",
-      cyan: "#2aa198",
-      white: "#eee8d5",
-      brightBlack: "#002b36",
-      brightRed: "#cb4b16",
-      brightGreen: "#586e75",
-      brightYellow: "#657b83",
-      brightBlue: "#839496",
-      brightMagenta: "#6c71c4",
-      brightCyan: "#93a1a1",
-      brightWhite: "#fdf6e3",
-    },
+    ansi16: ["#073642", "#dc322f", "#859900", "#b58900", "#268bd2", "#d33682", "#2aa198", "#eee8d5", "#002b36", "#cb4b16", "#586e75", "#657b83", "#839496", "#6c71c4", "#93a1a1", "#fdf6e3"],
   },
 
   // ── 9. GitHub Light ──────────────────────────────────────────────────────
@@ -496,6 +364,9 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#0969da",
       "--glyph-accent-dim": "rgba(9, 105, 218, 0.12)",
       "--glyph-accent-glow": "rgba(9, 105, 218, 0.25)",
+      "--glyph-selection-bg": "rgba(9, 105, 218, 0.28)",
+      "--glyph-search-match": "#fff8c5",
+      "--glyph-search-match-fg": "#1f2328",
       "--glyph-line": "rgba(0, 0, 0, 0.1)",
       "--glyph-line-strong": "rgba(0, 0, 0, 0.18)",
       "--glyph-shadow": "rgba(0, 0, 0, 0.1)",
@@ -504,29 +375,7 @@ const themes: GlyphTheme[] = [
       "--glyph-dot-size": "20px 20px",
       "--glyph-color-scheme": "light",
     },
-    xtermTheme: {
-      background: "#ffffff",
-      foreground: "#1f2328",
-      cursor: "#0969da",
-      cursorAccent: "#ffffff",
-      selectionBackground: "rgba(9, 105, 218, 0.2)",
-      black: "#24292f",
-      red: "#cf222e",
-      green: "#1a7f37",
-      yellow: "#9a6700",
-      blue: "#0969da",
-      magenta: "#8250df",
-      cyan: "#0598bc",
-      white: "#6e7781",
-      brightBlack: "#57606a",
-      brightRed: "#a40e26",
-      brightGreen: "#116329",
-      brightYellow: "#7d4e00",
-      brightBlue: "#0550ae",
-      brightMagenta: "#6639ba",
-      brightCyan: "#0a69a2",
-      brightWhite: "#8c959f",
-    },
+    ansi16: ["#24292f", "#cf222e", "#1a7f37", "#9a6700", "#0969da", "#8250df", "#0598bc", "#6e7781", "#57606a", "#a40e26", "#116329", "#7d4e00", "#0550ae", "#6639ba", "#0a69a2", "#8c959f"],
   },
 
   // ── 10. Paper ────────────────────────────────────────────────────────────
@@ -547,6 +396,9 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#2a4d6e",
       "--glyph-accent-dim": "rgba(42, 77, 110, 0.12)",
       "--glyph-accent-glow": "rgba(42, 77, 110, 0.25)",
+      "--glyph-selection-bg": "rgba(42, 77, 110, 0.30)",
+      "--glyph-search-match": "#f0d78c",
+      "--glyph-search-match-fg": "#1c1c1c",
       "--glyph-line": "rgba(0, 0, 0, 0.09)",
       "--glyph-line-strong": "rgba(0, 0, 0, 0.16)",
       "--glyph-shadow": "rgba(0, 0, 0, 0.1)",
@@ -555,29 +407,7 @@ const themes: GlyphTheme[] = [
       "--glyph-dot-size": "20px 20px",
       "--glyph-color-scheme": "light",
     },
-    xtermTheme: {
-      background: "#f2efe4",
-      foreground: "#1c1c1c",
-      cursor: "#2a4d6e",
-      cursorAccent: "#f2efe4",
-      selectionBackground: "rgba(42, 77, 110, 0.2)",
-      black: "#1c1c1c",
-      red: "#b94040",
-      green: "#4a7c59",
-      yellow: "#8b6914",
-      blue: "#2a4d6e",
-      magenta: "#7b4f82",
-      cyan: "#2a6d6e",
-      white: "#5a5a5a",
-      brightBlack: "#3d3d3d",
-      brightRed: "#c95050",
-      brightGreen: "#5a8c69",
-      brightYellow: "#9b7924",
-      brightBlue: "#3a5d7e",
-      brightMagenta: "#8b5f92",
-      brightCyan: "#3a7d7e",
-      brightWhite: "#888888",
-    },
+    ansi16: ["#1c1c1c", "#b94040", "#4a7c59", "#8b6914", "#2a4d6e", "#7b4f82", "#2a6d6e", "#5a5a5a", "#3d3d3d", "#c95050", "#5a8c69", "#9b7924", "#3a5d7e", "#8b5f92", "#3a7d7e", "#888888"],
   },
 ];
 
@@ -594,4 +424,35 @@ export function getTheme(id: ThemeId): GlyphTheme {
 }
 
 export const DEFAULT_THEME_ID: ThemeId = "nothing-dark";
+
+/** Matches the Rust `ThemePalette` struct's wire shape exactly (see
+ * `src-tauri/src/terminal/engine/palette.rs`) — passed straight through
+ * as the `palette` argument to the `engine_set_palette` command. */
+export type EnginePalette = {
+  ansi16: Array<[number, number, number]>;
+  foreground: [number, number, number];
+  background: [number, number, number] | null;
+  cursor: [number, number, number];
+};
+
+function hexToRgb(hex: string): [number, number, number] {
+  const clean = hex.replace("#", "");
+  return [
+    parseInt(clean.slice(0, 2), 16),
+    parseInt(clean.slice(2, 4), 16),
+    parseInt(clean.slice(4, 6), 16),
+  ];
+}
+
+/** Converts a theme to the color payload the Rust grid engine needs —
+ * see `ansi16`'s doc comment on `GlyphTheme` for why background is only
+ * ever non-null for "light" category themes. */
+export function themeToEnginePalette(theme: GlyphTheme): EnginePalette {
+  return {
+    ansi16: theme.ansi16.map(hexToRgb),
+    foreground: hexToRgb(theme.cssVars["--glyph-fg"]),
+    background: theme.category === "light" ? hexToRgb(theme.cssVars["--glyph-bg"]) : null,
+    cursor: hexToRgb(theme.cssVars["--glyph-accent"]),
+  };
+}
 

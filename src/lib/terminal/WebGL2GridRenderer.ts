@@ -4,9 +4,11 @@ import {
   ALL_UNDERLINE_FLAGS,
   decodeFrame,
   FrameKind,
+  MouseTrackingLevel,
   WireCursorShape,
   type DecodedCell,
   type DecodedFrame,
+  type MouseMode,
 } from "./engineProtocol";
 import type { GridRenderer, SelectionRange } from "./GridRenderer";
 import { measureCellMetrics } from "./CanvasGridRenderer";
@@ -168,6 +170,7 @@ export class WebGL2GridRenderer implements GridRenderer {
 
   private displayOffset = 0;
   private historySize = 0;
+  private mouseMode: MouseMode = { tracking: MouseTrackingLevel.Off, sgr: false };
   private selection: SelectionRange | null = null;
 
   constructor(canvas: HTMLCanvasElement, opts: RendererOptions) {
@@ -315,6 +318,10 @@ export class WebGL2GridRenderer implements GridRenderer {
     return this.displayOffset;
   }
 
+  getMouseMode() {
+    return this.mouseMode;
+  }
+
   getHistorySize() {
     return this.historySize;
   }
@@ -330,9 +337,24 @@ export class WebGL2GridRenderer implements GridRenderer {
     return text;
   }
 
+  getCursorPosition() {
+    return { row: this.cursor.line, col: this.cursor.col };
+  }
+
   setSelection(range: SelectionRange | null) {
     this.selection = range;
     this.dirty = true;
+  }
+
+  /** Reads a live CSS custom property off the canvas (so per-theme
+   * `<html>` overrides — see `useTerminalTheme` — apply here too) and
+   * parses it into normalized `[r, g, b, a]` floats for the instanced
+   * solid-quad pipeline. Mirrors `CanvasGridRenderer`'s `themeColor`,
+   * which can hand its string result straight to a 2D context and so
+   * doesn't need the parsing step. */
+  private themeColor(varName: string, fallback: string): [number, number, number, number] {
+    const value = getComputedStyle(this.canvas).getPropertyValue(varName).trim();
+    return parseCssColor(value || fallback);
   }
 
   /** Same shape/semantics as `CanvasGridRenderer`'s — see that file's
@@ -416,13 +438,29 @@ export class WebGL2GridRenderer implements GridRenderer {
       }
     }
 
+    // Reset the blink phase to "on" only when the cursor actually moved or
+    // changed visibility/shape — matching real terminals' convention that
+    // typing/cursor movement restarts the blink so feedback is immediate,
+    // without needing to wait out an "off" phase. Resetting unconditionally
+    // on every frame (as this used to) defeats blinking entirely for any
+    // shell with periodic redraws unrelated to the cursor — a live clock
+    // or git status in the prompt, a tmux status bar, etc. — since frames
+    // keep arriving faster than the 530ms blink period ever gets to hide it.
+    if (
+      this.cursor.col !== frame.cursorCol ||
+      this.cursor.line !== frame.cursorLine ||
+      this.cursor.visible !== frame.cursorVisible ||
+      this.cursor.shape !== frame.cursorShape
+    ) {
+      this.cursor.blinkOn = true;
+    }
     this.cursor.col = frame.cursorCol;
     this.cursor.line = frame.cursorLine;
     this.cursor.shape = frame.cursorShape;
     this.cursor.visible = frame.cursorVisible;
-    this.cursor.blinkOn = true;
     this.displayOffset = frame.displayOffset;
     this.historySize = Math.max(0, frame.totalLines - frame.rows);
+    this.mouseMode = frame.mouseMode;
     this.dirty = true;
   }
 
@@ -451,13 +489,43 @@ export class WebGL2GridRenderer implements GridRenderer {
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
 
+    // A found search match is painted as an opaque per-theme "highlighter"
+    // (see `--glyph-search-match`/`-fg`) baked straight into the
+    // background/glyph passes below, rather than as a translucent overlay
+    // quad — that way it reads as an unmistakable highlight no matter what
+    // the matched text's own fg/bg happened to be, instead of just tinting
+    // whatever was already there. Plain drag selection (`kind !== "search"`)
+    // is baked in here too now (alpha-composited over the cell's own
+    // background), so it sits *behind* the glyph pass below and the glyph's
+    // own fg color stays visible on top — like a real background layer,
+    // the same way normal terminal emulators render a selection highlight
+    // — instead of a translucent quad drawn over already-rendered text,
+    // which just dulled the glyphs and barely read as "filled".
+    const searchMatchBg = this.selection?.kind === "search" ? this.themeColor("--glyph-search-match", "#ffcc00") : null;
+    const searchMatchFg = this.selection?.kind === "search" ? this.themeColor("--glyph-search-match-fg", "#040406") : null;
+    const plainSelectionBg =
+      this.selection && this.selection.kind !== "search" ? this.themeColor("--glyph-selection-bg", "rgba(255, 48, 48, 0.35)") : null;
+
     // --- Backgrounds: exactly cols*rows instances, always. ---
     const bg = new Float32Array(cols * rows * SOLID_STRIDE);
     for (let row = 0; row < rows; row++) {
+      const searchCols = searchMatchBg ? this.selectionColsForRow(row) : null;
+      const selCols = plainSelectionBg ? this.selectionColsForRow(row) : null;
       for (let col = 0; col < cols; col++) {
         const idx = row * cols + col;
         const cell = this.grid[idx];
-        const [r, g, b, a] = unpackRgba(this.resolvedBg(cell));
+        let [r, g, b, a] =
+          searchCols && col >= searchCols[0] && col < searchCols[1] ? searchMatchBg! : unpackRgba(this.resolvedBg(cell));
+        if (selCols && col >= selCols[0] && col < selCols[1] && !(searchCols && col >= searchCols[0] && col < searchCols[1])) {
+          const [sr, sg, sb, sa] = plainSelectionBg!;
+          const outA = sa + a * (1 - sa);
+          if (outA > 0) {
+            r = (sr * sa + r * a * (1 - sa)) / outA;
+            g = (sg * sa + g * a * (1 - sa)) / outA;
+            b = (sb * sa + b * a * (1 - sa)) / outA;
+          }
+          a = outA;
+        }
         const o = idx * SOLID_STRIDE;
         bg[o] = col;
         bg[o + 1] = row;
@@ -481,6 +549,7 @@ export class WebGL2GridRenderer implements GridRenderer {
     // --- Glyphs: one instance per non-blank, non-spacer, non-hidden cell. ---
     const glyphData: number[] = [];
     for (let row = 0; row < rows; row++) {
+      const searchCols = searchMatchFg ? this.selectionColsForRow(row) : null;
       for (let col = 0; col < cols; col++) {
         const idx = row * cols + col;
         const cell = this.grid[idx];
@@ -495,8 +564,9 @@ export class WebGL2GridRenderer implements GridRenderer {
         const rect = this.atlas.getRect(text, bold, italic, wide);
         if (!rect) continue;
 
-        const [r, g, b, a] = unpackRgba(this.resolvedFg(cell));
-        const dim = (cell.flags & CellFlags.DIM) !== 0;
+        const inSearchMatch = searchCols !== null && col >= searchCols[0] && col < searchCols[1];
+        const [r, g, b, a] = inSearchMatch ? searchMatchFg! : unpackRgba(this.resolvedFg(cell));
+        const dim = !inSearchMatch && (cell.flags & CellFlags.DIM) !== 0;
         glyphData.push(
           col,
           row,
@@ -542,20 +612,36 @@ export class WebGL2GridRenderer implements GridRenderer {
         }
       }
     }
-    if (this.selection) {
-      // Same fixed accent-dim color the Canvas2D renderer reads live from
-      // CSS (`--glyph-accent-dim`) — hardcoded here for now, see the
-      // cursor-color comment in `pushCursorQuad` for why the WebGL2 path
-      // isn't theme-aware yet.
+    if (this.selection && this.selection.kind !== "search") {
+      // Fill is already baked into the background pass above (see
+      // `plainSelectionBg`) — only the solid-accent 1px box border is
+      // drawn here, on top of the glyphs, the same "-dim fill, solid-accent
+      // border" pairing the app uses elsewhere for selected/focused state.
+      // Border quads are thin filled rects — WebGL has no native
+      // stroke-rect — sized from a target px thickness converted into this
+      // pass's cell-unit coordinate space. Top/bottom edges only draw on
+      // the selection's actual first/last row, so a multi-line selection
+      // reads as one outlined block instead of a line between every row.
+      const [br, bg, bb, ba] = this.themeColor("--glyph-accent", "#ff3030");
+      const borderPx = 1.5;
+      const bx = this.cellWidth > 0 ? borderPx / this.cellWidth : 0;
+      const by = this.cellHeight > 0 ? borderPx / this.cellHeight : 0;
+      const sel = this.selection;
+      const topRow = Math.min(sel.startRow, sel.endRow);
+      const bottomRow = Math.max(sel.startRow, sel.endRow);
       for (let row = 0; row < rows; row++) {
         const cols_ = this.selectionColsForRow(row);
         if (!cols_) continue;
         const [fromCol, toCol] = cols_;
-        deco.push(fromCol, row, toCol - fromCol, 1, 1, 48 / 255, 48 / 255, 0.18);
+        deco.push(fromCol, row, bx, 1, br, bg, bb, ba);
+        deco.push(toCol - bx, row, bx, 1, br, bg, bb, ba);
+        if (row === topRow) deco.push(fromCol, row, toCol - fromCol, by, br, bg, bb, ba);
+        if (row === bottomRow) deco.push(fromCol, row + 1 - by, toCol - fromCol, by, br, bg, bb, ba);
       }
     }
     if (this.cursor.visible && this.cursor.blinkOn) {
-      pushCursorQuad(deco, this.cursor, this.cellWidth, this.cellHeight);
+      const accent = this.themeColor("--glyph-accent", "#ff3030");
+      pushCursorQuad(deco, this.cursor, this.cellWidth, this.cellHeight, accent);
     }
     if (deco.length > 0) {
       gl.bindBuffer(gl.ARRAY_BUFFER, this.decoInstanceVbo);
@@ -580,20 +666,43 @@ function unpackRgba(packed: number): [number, number, number, number] {
   return [r, g, b, a];
 }
 
+/** Parses a CSS color string — `#rgb`/`#rrggbb` hex or `rgb()`/`rgba()` —
+ * into normalized `[r, g, b, a]` floats, the shape the instanced
+ * solid-quad pipeline's per-instance color attribute needs. Falls back to
+ * the Nothing-red accent if `value` matches neither form (e.g. empty,
+ * before any theme has applied its CSS custom properties). */
+function parseCssColor(value: string): [number, number, number, number] {
+  const hex = value.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hex) {
+    let h = hex[1];
+    if (h.length === 3) h = h.replace(/./g, (c) => c + c);
+    return [
+      parseInt(h.slice(0, 2), 16) / 255,
+      parseInt(h.slice(2, 4), 16) / 255,
+      parseInt(h.slice(4, 6), 16) / 255,
+      1,
+    ];
+  }
+  const rgb = value.match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/i);
+  if (rgb) {
+    return [
+      Number(rgb[1]) / 255,
+      Number(rgb[2]) / 255,
+      Number(rgb[3]) / 255,
+      rgb[4] !== undefined ? Number(rgb[4]) : 1,
+    ];
+  }
+  return [1, 48 / 255, 48 / 255, 1];
+}
+
 function pushCursorQuad(
   out: number[],
   cursor: { col: number; line: number; shape: WireCursorShape },
   cellWidth: number,
   cellHeight: number,
+  accent: [number, number, number, number],
 ) {
-  // Nothing-red glow color, matching --glyph-accent / --glyph-accent-glow
-  // in the default theme. Theme-aware cursor color (reading the live CSS
-  // variable, like the Canvas2D renderer does) is not implemented for the
-  // WebGL2 path yet — see the Phase 3 report for why.
-  const r = 1;
-  const g = 48 / 255;
-  const b = 48 / 255;
-  const a = 1;
+  const [r, g, b, a] = accent;
   const { col, line, shape } = cursor;
   switch (shape) {
     case WireCursorShape.Block:

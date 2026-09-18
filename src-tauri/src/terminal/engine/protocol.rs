@@ -15,10 +15,10 @@
 //! offsets from the start of the frame.
 //!
 //! ```text
-//! FrameHeader (24 bytes, at offset 0):
+//! FrameHeader (25 bytes, at offset 0):
 //!   offset  size  field            description
 //!   0       4     magic            0x50_59_4C_47 ("GLYP" as LE u32)
-//!   4       1     version          protocol version, currently 1
+//!   4       1     version          protocol version, currently 2
 //!   5       1     frame_kind       0 = Partial (only damaged rows follow)
 //!                                  1 = Full    (every row 0..rows follows,
 //!                                               used for first frame / resize
@@ -34,6 +34,13 @@
 //!                                  live bottom), in lines
 //!   20      4     total_lines      history + viewport line count, for
 //!                                  scrollbar sizing
+//!   24      1     mouse_mode       the live PTY program's requested mouse
+//!                                  reporting mode, see `mouse_mode` below —
+//!                                  added in version 2 so the frontend can
+//!                                  forward mouse clicks/drags/wheel to
+//!                                  mouse-aware programs (vim, htop, tmux)
+//!                                  instead of always treating the mouse as
+//!                                  local-only text selection.
 //!
 //! Then, back to back, `num_damaged_rows` RowRecords, where
 //! `num_damaged_rows` is NOT stored in the header — the reader keeps
@@ -94,17 +101,52 @@
 //! Underline bits 4-7 are mutually exclusive with bit 3 and with each
 //! other; at most one underline-style bit is ever set.
 //!
+//! ## `mouse_mode` bit layout (u8)
+//! ```text
+//! bits 0-1  tracking level   0 = Off      (no mouse reporting requested)
+//!                            1 = Click    (`?1000`: button press/release
+//!                                          only, no motion)
+//!                            2 = Drag     (`?1002`: press/release plus
+//!                                          motion while a button is held)
+//!                            3 = AnyMotion (`?1003`: press/release plus
+//!                                          every motion event, even with
+//!                                          no button held)
+//! bit  2    sgr              `?1006` is set: encode reports as
+//!                             `CSI < Cb ; Cx ; Cy M`/`m` (press/release)
+//!                             instead of the legacy fixed-width form.
+//!                             Column/row are sent as decimal text, so this
+//!                             has no coordinate ceiling; prefer this
+//!                             encoding whenever it's set.
+//! bits 3-7  reserved
+//! ```
+//! `sgr` and the legacy `utf8` extended mode (`?1005`) are mutually
+//! exclusive in `alacritty_terminal`'s own mode bits (setting one clears
+//! the other), and `1005` is obsolete in favor of `1006` in every mouse-
+//! aware program in practice, so it is not surfaced as a separate bit here
+//! — a program that requests only `1005` gets the legacy fixed-width
+//! encoding (`sgr` bit unset), which still works up to column/row 223.
+//!
 //! ## Versioning
 //! `version` must be bumped on any incompatible layout change. The decoder
 //! must refuse to render a frame whose version it does not recognize
 //! rather than guess at field offsets.
 
 pub const MAGIC: u32 = u32::from_le_bytes(*b"GLYP");
-pub const VERSION: u8 = 1;
+pub const VERSION: u8 = 2;
 
-pub const HEADER_LEN: usize = 24;
+pub const HEADER_LEN: usize = 25;
 pub const ROW_HEADER_LEN: usize = 8;
 pub const CELL_RECORD_LEN: usize = 16;
+
+/// `mouse_mode` bit layout — see the module doc comment above.
+pub mod mouse_mode {
+    pub const TRACKING_MASK: u8 = 0b0000_0011;
+    pub const TRACKING_OFF: u8 = 0;
+    pub const TRACKING_CLICK: u8 = 1;
+    pub const TRACKING_DRAG: u8 = 2;
+    pub const TRACKING_ANY_MOTION: u8 = 3;
+    pub const SGR: u8 = 1 << 2;
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
@@ -166,6 +208,7 @@ pub struct FrameHeader {
     pub cursor_visible: bool,
     pub display_offset: u32,
     pub total_lines: u32,
+    pub mouse_mode: u8,
 }
 
 /// Encode a full frame: header + row records, little-endian, per the
@@ -190,6 +233,7 @@ pub fn encode_frame(header: &FrameHeader, wire_rows: &[WireRow]) -> Vec<u8> {
     buf.push(header.cursor_visible as u8);
     buf.extend_from_slice(&header.display_offset.to_le_bytes());
     buf.extend_from_slice(&header.total_lines.to_le_bytes());
+    buf.push(header.mouse_mode);
     debug_assert_eq!(buf.len(), HEADER_LEN);
 
     for row in wire_rows {
@@ -235,6 +279,7 @@ mod tests {
             cursor_visible: true,
             display_offset: 0,
             total_lines: 24,
+            mouse_mode: mouse_mode::TRACKING_DRAG | mouse_mode::SGR,
         };
         let frame = encode_frame(&header, &[]);
         assert_eq!(frame.len(), HEADER_LEN);
@@ -247,6 +292,7 @@ mod tests {
         assert_eq!(u16::from_le_bytes(frame[12..14].try_into().unwrap()), 3);
         assert_eq!(frame[14], WireCursorShape::Bar as u8);
         assert_eq!(frame[15], 1);
+        assert_eq!(frame[24], mouse_mode::TRACKING_DRAG | mouse_mode::SGR);
     }
 
     #[test]
@@ -261,13 +307,26 @@ mod tests {
             cursor_visible: true,
             display_offset: 0,
             total_lines: 1,
+            mouse_mode: mouse_mode::TRACKING_OFF,
         };
         let row = WireRow {
             row: 0,
             start_col: 2,
             cells: vec![
-                WireCell { codepoint: 'a' as u32, fg: 0xffffffff, bg: 0x000000ff, flags: 0, extra: vec![] },
-                WireCell { codepoint: 'e' as u32, fg: 0xffffffff, bg: 0x000000ff, flags: 0, extra: vec![0x0301] },
+                WireCell {
+                    codepoint: 'a' as u32,
+                    fg: 0xffffffff,
+                    bg: 0x000000ff,
+                    flags: 0,
+                    extra: vec![],
+                },
+                WireCell {
+                    codepoint: 'e' as u32,
+                    fg: 0xffffffff,
+                    bg: 0x000000ff,
+                    flags: 0,
+                    extra: vec![0x0301],
+                },
             ],
         };
         let frame = encode_frame(&header, &[row]);

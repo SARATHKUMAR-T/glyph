@@ -6,7 +6,8 @@ use std::time::Duration;
 
 use tauri::ipc::{Channel, InvokeResponseBody};
 
-use super::grid_engine::{GridEngine, ScrollbackInfo, SearchDirection, SearchMatch};
+use super::grid_engine::{CursorStyleOption, GridEngine, ScrollbackInfo, SearchDirection, SearchMatch};
+use super::palette::{self, ThemePalette};
 
 /// How often the flush thread checks the grid for damage and, if any is
 /// found, sends a frame over the channel. ~4ms matches a 240Hz budget,
@@ -20,23 +21,40 @@ struct EngineSession {
     stop_flush: Arc<AtomicBool>,
 }
 
-#[derive(Default)]
 pub struct EngineManager {
     sessions: Mutex<HashMap<String, EngineSession>>,
+    /// The most recently pushed theme palette (`set_palette`), applied to
+    /// every session that exists when it's pushed and to every session
+    /// created afterward — so a theme switch takes effect immediately and
+    /// new panes/tabs don't briefly flash the wrong theme's colors.
+    current_palette: Mutex<ThemePalette>,
+    /// The most recently pushed cursor-style preference (`set_cursor_style`),
+    /// applied the same way as `current_palette` above so new panes start
+    /// with the user's chosen shape instead of alacritty's own Block
+    /// default.
+    current_cursor_style: Mutex<CursorStyleOption>,
 }
 
-/// Whether the experimental Rust grid engine should run alongside the
-/// existing xterm.js pipeline for newly created sessions. Off by default;
-/// set `GLYPH_RUST_ENGINE=1` to A/B it.
-pub fn engine_enabled() -> bool {
-    std::env::var("GLYPH_RUST_ENGINE")
-        .map(|value| value == "1" || value.eq_ignore_ascii_case("true"))
-        .unwrap_or(false)
+impl Default for EngineManager {
+    fn default() -> Self {
+        Self {
+            sessions: Mutex::new(HashMap::new()),
+            current_palette: Mutex::new(palette::default_theme_palette()),
+            current_cursor_style: Mutex::new(CursorStyleOption::Bar),
+        }
+    }
 }
 
 impl EngineManager {
     pub fn create_session(&self, session_id: String, cols: u16, rows: u16) {
-        let engine = Arc::new(Mutex::new(GridEngine::new(cols, rows, DEFAULT_SCROLLBACK)));
+        let mut grid_engine = GridEngine::new(cols, rows, DEFAULT_SCROLLBACK);
+        if let Ok(palette) = self.current_palette.lock() {
+            grid_engine.set_palette(&palette);
+        }
+        if let Ok(style) = self.current_cursor_style.lock() {
+            grid_engine.set_cursor_style(*style);
+        }
+        let engine = Arc::new(Mutex::new(grid_engine));
         let session = EngineSession {
             engine,
             stop_flush: Arc::new(AtomicBool::new(false)),
@@ -45,6 +63,37 @@ impl EngineManager {
         if let Ok(mut sessions) = self.sessions.lock() {
             if let Some(old) = sessions.insert(session_id, session) {
                 old.stop_flush.store(true, Ordering::SeqCst);
+            }
+        }
+    }
+
+    /// Pushes a theme's colors to every open session and stores it as the
+    /// default for sessions created afterward — see `current_palette`.
+    pub fn set_palette(&self, palette: ThemePalette) {
+        if let Ok(mut current) = self.current_palette.lock() {
+            *current = palette;
+        }
+        if let Ok(sessions) = self.sessions.lock() {
+            for session in sessions.values() {
+                if let Ok(mut engine) = session.engine.lock() {
+                    engine.set_palette(&palette);
+                }
+            }
+        }
+    }
+
+    /// Pushes a cursor-style preference to every open session and stores it
+    /// as the default for sessions created afterward — see
+    /// `current_cursor_style`.
+    pub fn set_cursor_style(&self, style: CursorStyleOption) {
+        if let Ok(mut current) = self.current_cursor_style.lock() {
+            *current = style;
+        }
+        if let Ok(sessions) = self.sessions.lock() {
+            for session in sessions.values() {
+                if let Ok(mut engine) = session.engine.lock() {
+                    engine.set_cursor_style(style);
+                }
             }
         }
     }
@@ -115,10 +164,13 @@ impl EngineManager {
         direction: SearchDirection,
         from_row: usize,
         from_col: usize,
-    ) -> Option<SearchMatch> {
-        let engine = self.engine_handle(session_id)?;
-        let mut engine = engine.lock().ok()?;
-        engine.search(pattern, direction, from_row, from_col)
+        use_regex: bool,
+    ) -> Result<Option<SearchMatch>, String> {
+        let Some(engine) = self.engine_handle(session_id) else {
+            return Ok(None);
+        };
+        let mut engine = engine.lock().map_err(|_| "engine lock poisoned".to_string())?;
+        engine.search_with_mode(pattern, direction, from_row, from_col, use_regex)
     }
 
     /// Start streaming damage frames for `session_id` over `channel` at the

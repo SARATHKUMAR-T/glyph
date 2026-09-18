@@ -1,0 +1,114 @@
+name: Release
+
+# Triggered by pushing a tag like "v0.3.0". The tag is the single source of
+# truth for "what version is this" throughout the OTA pipeline: the
+# self-update script is fetched pinned to it, and the version-match guard
+# below ensures the binary that actually gets built agrees with it.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  verify-version:
+    name: Verify tag matches app version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          CONF_VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version")"
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "$TAG" != "$CONF_VERSION" ] || [ "$TAG" != "$PKG_VERSION" ]; then
+            echo "::error::Tag v$TAG doesn't match tauri.conf.json ($CONF_VERSION) / package.json ($PKG_VERSION)." \
+                 "Bump both files to $TAG, commit, then re-tag."
+            exit 1
+          fi
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.arch }})
+    needs: verify-version
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.arch }}
+
+      - name: Install Tauri Linux dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential curl wget file \
+            libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf
+
+      - run: npm ci
+
+      - name: Build app bundles
+        run: npm run tauri build
+
+      - name: Collect and rename bundle artifacts
+        id: collect
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.verify-version.outputs.version }}"
+          ARCH="${{ matrix.arch }}"
+          OUT="dist-release"
+          mkdir -p "$OUT"
+
+          APPIMAGE_SRC="$(find src-tauri/target/release/bundle/appimage -name '*.AppImage' | head -n1)"
+          cp "$APPIMAGE_SRC" "$OUT/Glyph_${VERSION}_${ARCH}.AppImage"
+
+          DEB_SRC="$(find src-tauri/target/release/bundle/deb -name '*.deb' | head -n1)"
+          cp "$DEB_SRC" "$OUT/glyph_${VERSION}_${ARCH}.deb"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.arch }}
+          path: dist-release/*
+
+  publish:
+    name: Publish GitHub Release
+    needs: [verify-version, build]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist-release
+          merge-multiple: true
+
+      - name: Generate checksums
+        working-directory: dist-release
+        run: sha256sum * > checksums.txt
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Glyph v${{ needs.verify-version.outputs.version }}
+          generate_release_notes: true
+          files: dist-release/*

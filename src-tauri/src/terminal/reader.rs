@@ -6,11 +6,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::events::terminal_events::{
-    TerminalErrorEvent, TerminalOutputEvent, TerminalSemanticEvent, ERROR_EVENT, OUTPUT_EVENT,
-    SEMANTIC_EVENT,
+    TerminalErrorEvent, TerminalSemanticEvent, ERROR_EVENT, SEMANTIC_EVENT,
 };
 
-use super::engine::manager::engine_enabled;
 use super::engine::EngineManager;
 use super::osc133::Osc133Parser;
 use super::session::TerminalSession;
@@ -27,7 +25,6 @@ pub fn spawn_reader_thread(
         let mut parser = Osc133Parser::default();
         let mut buffer = [0_u8; 8192];
         let mut leftover = Vec::new();
-        let feed_engine = engine_enabled();
 
         loop {
             match reader.read(&mut buffer) {
@@ -42,9 +39,7 @@ pub fn spawn_reader_thread(
                     leftover = new_leftover;
 
                     if !data.is_empty() {
-                        if feed_engine {
-                            app.state::<EngineManager>().feed(&session_id, data.as_bytes());
-                        }
+                        app.state::<EngineManager>().feed(&session_id, data.as_bytes());
 
                         for semantic in parser.feed(&data) {
                             let _ = app.emit(
@@ -58,14 +53,6 @@ pub fn spawn_reader_thread(
                                 },
                             );
                         }
-
-                        let _ = app.emit(
-                            OUTPUT_EVENT,
-                            TerminalOutputEvent {
-                                session_id: session_id.clone(),
-                                data,
-                            },
-                        );
                     }
                 }
                 Err(error) if error.kind() == ErrorKind::Interrupted => continue,

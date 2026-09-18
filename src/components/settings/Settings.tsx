@@ -12,6 +12,7 @@ import {
 import { CustomSelect } from "../ui/CustomSelect";
 import { getAllThemes, getTheme } from "../../lib/terminal/themes";
 import type { ThemeId } from "../../lib/terminal/themes";
+import type { UpdateInfo } from "../../lib/update/types";
 
 type SettingsProps = {
   open: boolean;
@@ -21,9 +22,14 @@ type SettingsProps = {
   onUpdateSettings: (patch: Partial<TerminalSettings>) => void;
   onUpdateKeybinding: (action: ShortcutAction, combo: KeyCombo) => void;
   onResetKeybindings: () => void;
+  currentVersion: string | null;
+  availableUpdate: UpdateInfo | null;
+  checkingForUpdate: boolean;
+  onCheckForUpdate: () => void;
+  onApplyUpdate: () => void;
 };
 
-type SettingsGroupKey = "themes" | "shortcuts" | "performance" | "matrix" | "cursor-font";
+type SettingsGroupKey = "themes" | "shortcuts" | "performance" | "matrix" | "cursor-font" | "updates";
 
 const COLOR_SWATCHES = [
   { label: "Muted Grey", color: "#8c8c91" },
@@ -73,6 +79,11 @@ export function Settings({
   onUpdateSettings,
   onUpdateKeybinding,
   onResetKeybindings,
+  currentVersion,
+  availableUpdate,
+  checkingForUpdate,
+  onCheckForUpdate,
+  onApplyUpdate,
 }: SettingsProps) {
   const [recordingAction, setRecordingAction] = useState<ShortcutAction | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<SettingsGroupKey>>(() => new Set(["themes"]));
@@ -154,15 +165,17 @@ export function Settings({
               type="button"
               className="settings-text-btn"
               onClick={() => {
-                if (expandedGroups.size === 5) {
+                if (expandedGroups.size === 6) {
                   setExpandedGroups(new Set());
                 } else {
-                  setExpandedGroups(new Set(["themes", "shortcuts", "performance", "matrix", "cursor-font"]));
+                  setExpandedGroups(
+                    new Set(["themes", "shortcuts", "performance", "matrix", "cursor-font", "updates"]),
+                  );
                 }
               }}
               title="Toggle all sections"
             >
-              {expandedGroups.size === 5 ? "Collapse All" : "Expand All"}
+              {expandedGroups.size === 6 ? "Collapse All" : "Expand All"}
             </button>
             {onClose && (
               <button
@@ -366,6 +379,16 @@ export function Settings({
                 {settings.showPerformanceBar ? "ON" : "OFF"}
               </button>
             </div>
+            <div className="settings-row">
+              <span>Restore Tabs on Restart</span>
+              <button
+                type="button"
+                className={settings.restoreTabsOnRestart ? "settings-toggle is-active" : "settings-toggle"}
+                onClick={() => onUpdateSettings({ restoreTabsOnRestart: !settings.restoreTabsOnRestart })}
+              >
+                {settings.restoreTabsOnRestart ? "ON" : "OFF"}
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -562,6 +585,80 @@ export function Settings({
                 onChange={(val) => onUpdateSettings({ fontSize: val })}
               />
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── 6. Updates Group ─────────────────────────────────── */}
+      <div className="settings-accordion-group">
+        <button
+          type="button"
+          className={`settings-group-header ${expandedGroups.has("updates") ? "is-open" : ""}`}
+          onClick={() => toggleGroup("updates")}
+          aria-expanded={expandedGroups.has("updates")}
+        >
+          <div className="settings-group-header-left">
+            <span className="settings-group-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12a9 9 0 1 1-3-6.7" />
+                <polyline points="21 3 21 9 15 9" />
+              </svg>
+            </span>
+            <div className="settings-group-title-wrap">
+              <span className="settings-group-title">Updates</span>
+              <span className="settings-group-desc">Version, release channel & OTA status</span>
+            </div>
+          </div>
+          <div className="settings-group-header-right">
+            <span className="settings-group-badge">
+              {availableUpdate ? `v${availableUpdate.version} available` : currentVersion ? `v${currentVersion}` : "—"}
+            </span>
+            <svg className="settings-group-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </div>
+        </button>
+
+        {expandedGroups.has("updates") && (
+          <div className="settings-group-content">
+            <div className="settings-row">
+              <span>Current Version</span>
+              <strong>{currentVersion ? `v${currentVersion}` : "Unavailable"}</strong>
+            </div>
+            <div className="settings-row">
+              <span>Status</span>
+              <strong>
+                {checkingForUpdate
+                  ? "Checking…"
+                  : availableUpdate
+                    ? `v${availableUpdate.version} available`
+                    : "Up to date"}
+              </strong>
+            </div>
+            <div className="settings-row">
+              <span>Check GitHub Releases</span>
+              <button
+                type="button"
+                className="settings-toggle"
+                onClick={onCheckForUpdate}
+                disabled={checkingForUpdate}
+              >
+                {checkingForUpdate ? "Checking…" : "Check Now"}
+              </button>
+            </div>
+            {availableUpdate && (
+              <div className="settings-row">
+                <span>Apply Update</span>
+                <button type="button" className="settings-toggle is-active" onClick={onApplyUpdate}>
+                  Stage in Terminal
+                </button>
+              </div>
+            )}
+            <p className="settings-group-desc" style={{ marginTop: 4 }}>
+              Glyph checks GitHub Releases for newer builds every 6 hours. Staging an
+              update places its install command in the active terminal — nothing runs
+              until you press Enter.
+            </p>
           </div>
         )}
       </div>

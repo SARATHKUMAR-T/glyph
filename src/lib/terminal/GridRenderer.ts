@@ -1,3 +1,5 @@
+import type { MouseMode } from "./engineProtocol";
+
 /** Viewport-relative selection range (row 0 = top of the visible grid),
  * drawn as a live highlight overlay by the renderer during mouse drag. The
  * authoritative selected *text* still comes from the Rust engine (see
@@ -17,6 +19,13 @@ export interface SelectionRange {
   endRow: number;
   endCol: number;
   block: boolean;
+  /** `"text"` (default, when omitted) is the subtle drag-selection tint
+   * (`--glyph-accent-dim`). `"search"` is a search-match result — drawn
+   * with the theme's full `--glyph-accent` at a fixed, higher alpha so a
+   * found match reads as an unmistakable, theme-colored highlight instead
+   * of blending into the same faint tint used for hover states elsewhere
+   * in the UI. */
+  kind?: "text" | "search";
 }
 
 /**
@@ -38,10 +47,18 @@ export interface GridRenderer {
   getDisplayOffset(): number;
   /** Scrollback line count from the most recently applied frame. */
   getHistorySize(): number;
+  /** The live PTY program's requested mouse-reporting mode from the most
+   * recently applied frame — see `mouseReporting.ts`. */
+  getMouseMode(): MouseMode;
   /** Plain text of one viewport row, for link detection and word/line
    * selection — reassembled from the local grid mirror, not a fresh IPC
    * round-trip. */
   getRowText(row: number): string;
+  /** Cursor position from the most recently applied frame, viewport-row
+   * relative like everything else here (0 = top row currently on screen) —
+   * for locating the "active" input line (Select All, the `quote`
+   * built-in). */
+  getCursorPosition(): { row: number; col: number };
   /** Sets (or clears, when `null`) the live selection highlight overlay. */
   setSelection(range: SelectionRange | null): void;
   dispose(): void;

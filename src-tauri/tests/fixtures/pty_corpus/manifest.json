@@ -22,7 +22,7 @@
     "file": "wide_cjk_emoji.bin",
     "cols": 40,
     "rows": 6,
-    "knownIssue": "alacritty_terminal's unicode-width crate classifies some emoji as single-width where xterm.js classifies them double-width — a known cross-engine Unicode table disagreement, not a parser bug. See BENCH.md."
+    "knownIssue": "alacritty_terminal's unicode-width crate classifies emoji as double-width where xterm.js classifies them single-width — a known cross-engine Unicode table disagreement, not a parser bug. See BENCH.md."
   },
   {
     "name": "wrap_reflow",
@@ -52,7 +52,7 @@
       "rows": 8
     },
     "postFile": "resize_reflow.post.bin",
-    "knownIssue": "KNOWN BUG in alacritty_terminal 0.26.0's Grid::shrink_columns reflow: drops a whole row of content when a wrapped line must split across 3+ new rows on shrink. See GridEngine's resize_tests module in grid_engine.rs for the minimal repro and detail. Not a bug in this test or in the Rust<->JS comparison — xterm.js reflows correctly."
+    "knownIssue": "Investigated as a suspected data-loss bug; direct instrumentation of alacritty_terminal 0.26.0's Grid::shrink_columns showed the content is never actually dropped (see GridEngine's resize_tests module in grid_engine.rs for the full corrected analysis). The real, confirmed difference: xterm.js reclaims blank rows below the content to fit a reflow's extra rows within the existing viewport height, while alacritty_terminal instead grows the buffer and lets the oldest reflowed row age into scrollback even when blank space below could have absorbed it — a real but low-severity inefficiency (an extra scroll to see recently-reflowed content), not lost data, and not worth the risk of patching alacritty_terminal's core reflow accounting to match xterm.js's approach."
   },
   {
     "name": "osc133_prompts",

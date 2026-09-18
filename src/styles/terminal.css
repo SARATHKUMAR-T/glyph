@@ -208,8 +208,153 @@
   inset: 0;
 }
 
+/* Command history rail: a horizontal strip of recently-run commands (OSC
+   133 boundaries), sitting between the pane header and the live terminal
+   output. Each chip is a compact summary with hover-revealed actions —
+   re-run, copy command, copy output — not a full duplicate of the
+   terminal's own scrollback, which remains the source of truth for output. */
 .block-rail {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--glyph-line);
+  background: color-mix(in srgb, var(--glyph-surface) 55%, transparent);
+  scrollbar-width: none;
+}
+
+.block-rail::-webkit-scrollbar {
   display: none;
+}
+
+.terminal-block {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  max-width: 220px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--glyph-line);
+  border-radius: 5px;
+  background: var(--glyph-surface);
+  cursor: default;
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.terminal-block:hover {
+  border-color: var(--glyph-line-strong);
+  background: var(--glyph-surface-raised);
+}
+
+.terminal-block-running {
+  border-color: var(--glyph-accent-dim);
+}
+
+.terminal-block-error {
+  border-color: color-mix(in srgb, #d71921 45%, var(--glyph-line));
+}
+
+.terminal-block-header {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  font-family: var(--nothing-mono);
+  font-size: 10px;
+  color: var(--glyph-fg-muted);
+  white-space: nowrap;
+}
+
+.block-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--glyph-fg-muted);
+  flex-shrink: 0;
+}
+
+.block-dot.block-running {
+  background: var(--glyph-accent);
+  box-shadow: 0 0 5px var(--glyph-accent-glow);
+  animation: block-dot-pulse 1.1s ease-in-out infinite;
+}
+
+.block-dot.block-success {
+  background: #2fb344;
+}
+
+.block-dot.block-error {
+  background: #d71921;
+}
+
+.block-dot.block-interrupted {
+  background: #d99a2b;
+}
+
+@keyframes block-dot-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.terminal-block-command {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--nothing-mono);
+  font-size: 11px;
+  color: var(--glyph-fg);
+}
+
+.terminal-block-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.terminal-block:hover .terminal-block-actions,
+.terminal-block:focus-within .terminal-block-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.terminal-block-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--glyph-fg-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: all 120ms ease;
+}
+
+.terminal-block-action-btn:hover:not(:disabled) {
+  background: var(--glyph-accent-dim);
+  color: var(--glyph-fg);
+}
+
+.terminal-block-action-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.terminal-block-action-btn svg {
+  display: block;
 }
 
 .terminal-output {
@@ -262,23 +407,20 @@
   white-space: nowrap;
 }
 
-.xterm-host {
+.terminal-host {
   position: relative;
   flex: 1 1 0;
   min-width: 0;
   min-height: 0;
-  /* 12px right padding: fit-addon uses this as available width so the
-     canvas columns are calculated to stop well before the scrollbar */
-  padding: 6px 12px 6px 12px !important;
+  /* Right padding clears the scrollbar track (right: 6px, width: 9px in
+     .terminal-scrollbar-track below == 15px from the edge) with a couple
+     of px of breathing room, so the canvas columns are calculated to stop
+     well before the scrollbar instead of running underneath it. */
+  padding: 6px 17px 6px 12px !important;
   overflow: hidden;
   background: transparent !important;
 }
 
-.xterm {
-  background-color: transparent !important;
-}
-
-/* Experimental Rust-engine Canvas2D renderer (Phase 2, GLYPH_RUST_ENGINE=1) */
 .glyph-canvas-host {
   display: block;
 }
@@ -300,157 +442,66 @@
   pointer-events: none;
 }
 
-.xterm-screen {
-  margin-right: 0 !important;
+/* Live preview of an in-progress (uncommitted) IME composition, anchored
+   at the cursor cell — see GlyphEngineTerminalView's handleCompositionUpdate. */
+.glyph-canvas-ime-overlay {
+  position: absolute;
+  display: none;
+  pointer-events: none;
+  white-space: pre;
+  color: var(--glyph-fg);
+  background: var(--glyph-accent-dim);
+  border-bottom: 2px solid var(--glyph-accent);
+  box-sizing: border-box;
+  z-index: 6;
 }
 
-/* Hide xterm overview ruler gutter and its left border line completely for all themes */
-.xterm-decoration-overview-ruler {
-  display: none !important;
+/* Scrollback position indicator + drag-to-scroll, drawn as a DOM overlay
+   rather than inside the canvas — see GlyphEngineTerminalView's
+   updateScrollbarThumb. Replaces the themed native scrollbar the old
+   xterm.js viewport had.
+
+   Positioned to clear `.handle-east`'s window-edge resize strip (see
+   nothing.css — narrowed to 6px specifically so this track, starting at
+   `right: 6px`, has clean room beside it): that overlay sits in a sibling
+   stacking context painted above the entire `.workspace` subtree (the
+   `.workspace` wrapper itself sets `z-index: 2`, so nothing inside it can
+   out-rank a document-level sibling no matter what z-index it's given),
+   so the old right:2px/width:5px track used to sit almost entirely inside
+   the resize strip's hit region — every click landed on the resize
+   handle instead, showing its cursor and eating the pointer event before
+   it ever reached the scrollbar. Geometric separation, not stacking
+   order, is what actually fixes that. */
+.terminal-scrollbar-track {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  bottom: 2px;
+  width: 9px;
+  /* Toggled to "auto" in updateScrollbarThumb only while there's actual
+     scrollback to show/drag through — otherwise this stays out of the
+     way entirely, including of the window-resize strip beside it. */
+  pointer-events: none;
+  cursor: pointer;
+  z-index: 5;
 }
 
-/* Base search match highlight boxes */
-.xterm-find-result-decoration,
-.xterm-find-active-result-decoration {
-  border-radius: 3px !important;
-  box-sizing: border-box !important;
-  pointer-events: none !important;
-  background: transparent !important;
-  background-color: transparent !important;
+.terminal-scrollbar-thumb {
+  position: absolute;
+  top: 0;
+  left: 1px;
+  right: 1px;
+  min-height: 24px;
+  border-radius: 3px;
+  background: var(--glyph-accent-glow);
+  cursor: pointer;
+  transition: background 140ms ease;
+  display: none;
 }
 
-/* Light Theme: crisp golden border for matches; bold red-orange border for active match */
-[data-glyph-theme-category="light"] .xterm-find-result-decoration:not(.xterm-find-active-result-decoration) {
-  outline: 1.5px solid #d4a000 !important;
-  background: transparent !important;
-  background-color: transparent !important;
-}
-
-[data-glyph-theme-category="light"] .xterm-find-active-result-decoration {
-  outline: 2px solid #e03131 !important;
-  background: transparent !important;
-  background-color: transparent !important;
-  box-shadow: 0 0 0 1px rgba(224, 49, 49, 0.4) !important;
-}
-
-/* Dark Theme: crisp amber border for matches; glowing Nothing-red border for active match */
-:root:not([data-glyph-theme-category="light"]) .xterm-find-result-decoration:not(.xterm-find-active-result-decoration) {
-  outline: 1.5px solid #eab308 !important;
-  background: transparent !important;
-  background-color: transparent !important;
-}
-
-:root:not([data-glyph-theme-category="light"]) .xterm-find-active-result-decoration {
-  outline: 2px solid #ff4d2e !important;
-  background: transparent !important;
-  background-color: transparent !important;
-  box-shadow: 0 0 4px rgba(255, 77, 46, 0.6) !important;
-}
-
-
-
-.xterm-viewport {
-  /* Extend the viewport (and therefore the scrollbar) rightward to cover
-     the 12px padding on .xterm-host, so the scrollbar sits at the true
-     right edge with no gap visible next to it.
-     The canvas is still bounded by the columns calculated from the
-     padded width, so text never renders under the scrollbar. */
-  width: calc(100% + 12px) !important;
-  background-color: transparent !important;
-  scrollbar-width: thin !important;
-  scrollbar-color: var(--glyph-accent-glow) rgba(0, 0, 0, 0.15) !important;
-}
-
-/* Thin scrollbar — track */
-.xterm .xterm-viewport::-webkit-scrollbar,
-.xterm-viewport::-webkit-scrollbar {
-  width: 5px !important;
-  height: 5px !important;
-}
-
-.xterm .xterm-viewport::-webkit-scrollbar-track,
-.xterm-viewport::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.15) !important;
-}
-
-/* Thumb uses theme accent */
-.xterm .xterm-viewport::-webkit-scrollbar-thumb,
-.xterm-viewport::-webkit-scrollbar-thumb {
-  background: var(--glyph-accent-glow) !important;
-  border-radius: 3px !important;
-  transition: background 140ms ease !important;
-}
-
-.xterm .xterm-viewport::-webkit-scrollbar-thumb:hover,
-.xterm-viewport::-webkit-scrollbar-thumb:hover {
-  background: var(--glyph-accent) !important;
-}
-
-.xterm .xterm-screen {
-  letter-spacing: 0;
-}
-
-/* Unique Glyph Glowing Cursor Styling */
-.xterm .xterm-cursor-layer {
-  z-index: 10 !important;
-}
-
-.xterm .xterm-cursor,
-.xterm .xterm-cursor.xterm-cursor-outline {
-  outline: none !important;
-  outline-width: 0 !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-.xterm .xterm-cursor-block {
-  background-color: var(--glyph-accent) !important;
-  color: var(--glyph-bg) !important;
-  outline: none !important;
-  border: none !important;
-  box-shadow: none !important;
-  filter: drop-shadow(0 0 5px var(--glyph-accent-glow)) !important;
-  border-radius: 1px !important;
-}
-
-.xterm .xterm-cursor-bar {
-  background-color: var(--glyph-accent) !important;
-  width: 3.5px !important;
-  outline: none !important;
-  border: none !important;
-  box-shadow: none !important;
-  filter: drop-shadow(0 0 4px var(--glyph-accent-glow)) !important;
-}
-
-.xterm .xterm-cursor-underline {
-  background-color: transparent !important;
-  outline: none !important;
-  border: none !important;
-  border-bottom: 3.5px solid var(--glyph-accent) !important;
-  box-shadow: none !important;
-  filter: drop-shadow(0 2px 4px var(--glyph-accent-glow)) !important;
-}
-
-@keyframes glyph-cursor-blink {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.15;
-  }
-}
-
-.xterm .xterm-cursor-blink {
-  animation: glyph-cursor-blink 1s ease-in-out infinite !important;
-}
-
-/* Inactive Pane Cursor Styling - Dimmed opacity & non-blinking red cursor */
-.terminal-view:not(.is-active-pane) .xterm .xterm-cursor-layer {
-  opacity: 0.45 !important;
-}
-
-.terminal-view:not(.is-active-pane) .xterm .xterm-cursor-blink {
-  animation: none !important;
+.terminal-scrollbar-track:hover .terminal-scrollbar-thumb,
+.terminal-scrollbar-thumb:active {
+  background: var(--glyph-accent);
 }
 
 .terminal-search {
@@ -558,6 +609,126 @@
   display: block;
 }
 
+/* Regex-mode toggle: same footprint as the other icon buttons, plus an
+   "on" state since it's a persistent mode, not a momentary action. */
+.terminal-search-regex {
+  font-family: var(--nothing-mono);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.terminal-search-regex.is-active {
+  border-color: var(--glyph-accent);
+  background: var(--glyph-accent-dim);
+  color: var(--glyph-accent);
+}
+
+.terminal-search-error {
+  color: var(--glyph-error, #e5484d);
+  pointer-events: auto;
+  cursor: help;
+}
+
+/* Command palette (Ctrl+Shift+P): a top-anchored floating panel, matching
+   the modal system's surface/border/shadow tokens (see workspace.css) but
+   positioned like a launcher rather than a centered dialog. */
+.command-palette-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  justify-content: center;
+  padding-top: 14vh;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  animation: command-palette-fade-in 0.12s ease-out;
+}
+
+@keyframes command-palette-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.command-palette {
+  width: 560px;
+  max-width: 92vw;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--glyph-surface);
+  border: 1px solid var(--glyph-line-strong);
+  border-radius: 10px;
+  box-shadow: 0 20px 60px var(--glyph-shadow);
+  overflow: hidden;
+  height: fit-content;
+}
+
+.command-palette-input {
+  flex-shrink: 0;
+  height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-bottom: 1px solid var(--glyph-line);
+  outline: none;
+  background: transparent;
+  color: var(--glyph-fg);
+  font-family: var(--nothing-mono);
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+.command-palette-input::placeholder {
+  color: var(--glyph-fg-muted);
+  opacity: 0.7;
+}
+
+.command-palette-list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+}
+
+.command-palette-empty {
+  padding: 14px 10px;
+  color: var(--glyph-fg-muted);
+  font-family: var(--nothing-mono);
+  font-size: 12px;
+  text-align: center;
+}
+
+.command-palette-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--glyph-fg-muted);
+  font-family: var(--nothing-mono);
+  font-size: 12.5px;
+}
+
+.command-palette-item.is-active {
+  background: var(--glyph-accent-dim);
+  color: var(--glyph-fg);
+}
+
+.command-palette-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-palette-item-shortcut {
+  flex-shrink: 0;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  color: var(--glyph-fg-muted);
+  opacity: 0.75;
+}
 
 .terminal-input {
   display: none;
@@ -572,16 +743,9 @@
     display: none;
   }
 
-  .xterm-host {
+  .terminal-host {
     padding: 6px 0 0 10px;
   }
-}
-
-/* Web links addon hover style */
-.xterm-hover-pattern,
-.xterm-hover-pattern span {
-  cursor: pointer !important;
-  text-decoration: underline !important;
 }
 
 /* Expanded (enlarged) Pane View */

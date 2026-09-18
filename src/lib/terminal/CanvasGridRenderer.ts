@@ -4,10 +4,12 @@ import {
   CellFlags,
   decodeFrame,
   FrameKind,
+  MouseTrackingLevel,
   packedColorToCss,
   WireCursorShape,
   type DecodedCell,
   type DecodedFrame,
+  type MouseMode,
 } from "./engineProtocol";
 import type { GridRenderer, SelectionRange } from "./GridRenderer";
 
@@ -65,6 +67,7 @@ export class CanvasGridRenderer implements GridRenderer {
 
   private displayOffset = 0;
   private historySize = 0;
+  private mouseMode: MouseMode = { tracking: MouseTrackingLevel.Off, sgr: false };
   private selection: SelectionRange | null = null;
 
   constructor(canvas: HTMLCanvasElement, opts: RendererOptions) {
@@ -115,6 +118,10 @@ export class CanvasGridRenderer implements GridRenderer {
     return this.historySize;
   }
 
+  getMouseMode() {
+    return this.mouseMode;
+  }
+
   getRowText(row: number): string {
     if (row < 0 || row >= this.rows) return "";
     const base = row * this.cols;
@@ -124,6 +131,10 @@ export class CanvasGridRenderer implements GridRenderer {
       text += this.text[base + col];
     }
     return text;
+  }
+
+  getCursorPosition() {
+    return { row: this.cursor.line, col: this.cursor.col };
   }
 
   setSelection(range: SelectionRange | null) {
@@ -214,13 +225,26 @@ export class CanvasGridRenderer implements GridRenderer {
       }
     }
 
+    // Reset the blink phase to "on" only when the cursor actually moved or
+    // changed visibility/shape — see the identical comment in
+    // WebGL2GridRenderer's `applyFrame` for why resetting unconditionally
+    // on every frame defeats blinking for any shell with periodic
+    // redraws unrelated to the cursor.
+    if (
+      this.cursor.col !== frame.cursorCol ||
+      prevCursorLine !== frame.cursorLine ||
+      this.cursor.visible !== frame.cursorVisible ||
+      this.cursor.shape !== frame.cursorShape
+    ) {
+      this.cursor.blinkOn = true;
+    }
     this.cursor.col = frame.cursorCol;
     this.cursor.line = frame.cursorLine;
     this.cursor.shape = frame.cursorShape;
     this.cursor.visible = frame.cursorVisible;
-    this.cursor.blinkOn = true;
     this.displayOffset = frame.displayOffset;
     this.historySize = Math.max(0, frame.totalLines - frame.rows);
+    this.mouseMode = frame.mouseMode;
     touchedRows.add(prevCursorLine);
     touchedRows.add(this.cursor.line);
 
@@ -235,7 +259,7 @@ export class CanvasGridRenderer implements GridRenderer {
 
   private paintRow(row: number) {
     if (row < 0 || row >= this.rows) return;
-    const { ctx, cellWidth, cellHeight, cols } = this;
+    const { ctx, cellWidth, cellHeight, cols, baseline } = this;
     const y = row * cellHeight;
     const base = row * cols;
 
@@ -254,6 +278,21 @@ export class CanvasGridRenderer implements GridRenderer {
         runStart = col;
         runColor = color;
       }
+    }
+
+    const selCols = this.selectionColsForRow(row);
+    const isPlainSelection = selCols && this.selection?.kind !== "search";
+
+    // Plain drag/word/line selection paints its fill here — before glyphs,
+    // like a real background layer — instead of as a translucent tint over
+    // already-rendered text (which just dulled the glyph colors and barely
+    // read as "filled"). Glyphs drawn next keep their own fg color on top,
+    // matching how normal terminal emulators (Alacritty, VS Code, iTerm2)
+    // render a selection highlight.
+    if (isPlainSelection) {
+      const [fromCol, toCol] = selCols!;
+      ctx.fillStyle = this.themeColor("--glyph-selection-bg", "rgba(255, 48, 48, 0.35)");
+      ctx.fillRect(fromCol * cellWidth, y, (toCol - fromCol) * cellWidth, cellHeight);
     }
 
     // Foreground text + decorations: batch runs of identical style.
@@ -285,11 +324,59 @@ export class CanvasGridRenderer implements GridRenderer {
       col = end;
     }
 
-    const selCols = this.selectionColsForRow(row);
     if (selCols) {
       const [fromCol, toCol] = selCols;
-      ctx.fillStyle = this.themeColor("--glyph-accent-dim", "rgba(255, 48, 48, 0.18)");
-      ctx.fillRect(fromCol * cellWidth, y, (toCol - fromCol) * cellWidth, cellHeight);
+      if (this.selection?.kind === "search") {
+        // A found match gets a solid, per-theme "highlighter" treatment —
+        // opaque highlight color plus a redraw of the match's own text in
+        // a theme-tuned ink color — rather than the translucent tint below,
+        // so it reads as an unmistakable highlight regardless of what was
+        // already under it (unlike a translucent overlay, legible on any
+        // background/foreground combination the matched text happened to
+        // have).
+        ctx.fillStyle = this.themeColor("--glyph-search-match", "#ffcc00");
+        ctx.fillRect(fromCol * cellWidth, y, (toCol - fromCol) * cellWidth, cellHeight);
+
+        let matchText = "";
+        for (let c = fromCol; c < toCol; c++) matchText += this.text[base + c];
+        const matchCell = this.grid[base + fromCol];
+        const bold = (matchCell.flags & CellFlags.BOLD) !== 0;
+        const italic = (matchCell.flags & CellFlags.ITALIC) !== 0;
+        ctx.font = `${italic ? "italic " : ""}${bold ? "700" : "400"} ${this.opts.fontSize}px ${this.opts.fontFamily}`;
+        ctx.textBaseline = "alphabetic";
+        ctx.fillStyle = this.themeColor("--glyph-search-match-fg", "#040406");
+        ctx.fillText(matchText, fromCol * cellWidth, y + baseline);
+      } else {
+        // Fill was already painted before the glyph pass above (see
+        // `isPlainSelection`); a solid-accent 1px box border on top of the
+        // already-drawn glyphs is all that's left — the same "-dim fill,
+        // solid-accent border" pairing the rest of the app uses for
+        // selected/focused state (see e.g. workspace.css). Only the row(s)
+        // at the very top/bottom of the selection get a top/bottom edge,
+        // so a multi-line selection reads as a single outlined block
+        // rather than a horizontal line between every row.
+        const sel = this.selection!;
+        const isTopRow = row === Math.min(sel.startRow, sel.endRow);
+        const isBottomRow = row === Math.max(sel.startRow, sel.endRow);
+        const x0 = fromCol * cellWidth;
+        const x1 = toCol * cellWidth;
+        ctx.strokeStyle = this.themeColor("--glyph-accent", "#ff3030");
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(x0 + 0.5, y);
+        ctx.lineTo(x0 + 0.5, y + cellHeight);
+        ctx.moveTo(x1 - 0.5, y);
+        ctx.lineTo(x1 - 0.5, y + cellHeight);
+        if (isTopRow) {
+          ctx.moveTo(x0, y + 0.5);
+          ctx.lineTo(x1, y + 0.5);
+        }
+        if (isBottomRow) {
+          ctx.moveTo(x0, y + cellHeight - 0.5);
+          ctx.lineTo(x1, y + cellHeight - 0.5);
+        }
+        ctx.stroke();
+      }
     }
 
     if (this.cursor.line === row && this.cursor.visible && this.cursor.blinkOn) {
@@ -381,18 +468,14 @@ export class CanvasGridRenderer implements GridRenderer {
     const x = this.cursor.col * cellWidth;
     const y = this.cursor.line * cellHeight;
     const accent = this.themeColor("--glyph-accent", "#ff3030");
-    const glow = this.themeColor("--glyph-accent-glow", "rgba(255, 48, 48, 0.45)");
     const bg = this.themeColor("--glyph-bg", "#000000");
 
     ctx.save();
-    ctx.shadowColor = glow;
-    ctx.shadowBlur = 6;
     ctx.fillStyle = accent;
 
     switch (this.cursor.shape) {
       case WireCursorShape.Block: {
         ctx.fillRect(x, y, cellWidth, cellHeight);
-        ctx.shadowBlur = 0;
         const idx = this.cursor.line * this.cols + this.cursor.col;
         const under = this.text[idx];
         if (under && under !== " ") {

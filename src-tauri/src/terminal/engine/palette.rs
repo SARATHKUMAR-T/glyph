@@ -1,7 +1,8 @@
-//! Default 16-color ANSI palette, mirroring the values in
-//! `src/lib/terminal/xterm.ts` (`DEFAULT_THEME`) so the Rust engine and the
-//! xterm.js path render identically until per-theme sync lands in a later
-//! phase.
+//! Default 16-color ANSI palette, matching the app's default "Nothing
+//! Dark" theme — used to seed `EngineManager`'s active palette before the
+//! frontend has pushed anything (see `default_theme_palette`) and as the
+//! fallback for palette slots a pushed theme doesn't cover. Per-theme sync
+//! itself (`ThemePalette`, `GridEngine::set_palette`) lives here too.
 //!
 //! Colors are stored as packed `0xRRGGBBAA` (straight alpha, alpha always
 //! 0xff for palette colors).
@@ -61,6 +62,47 @@ pub fn resolve_indexed(index: u8) -> u32 {
 
 pub const fn pack(r: u8, g: u8, b: u8) -> u32 {
     ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | 0xff
+}
+
+/// Inverse of `pack`, dropping the alpha byte (always `0xff` on the values
+/// this is used with — the static palette constants).
+const fn unpack(color: u32) -> (u8, u8, u8) {
+    ((color >> 24) as u8, (color >> 16) as u8, (color >> 8) as u8)
+}
+
+/// One theme's worth of terminal colors, pushed from the frontend
+/// (`engine_set_palette`) whenever the active app theme changes, and
+/// applied to every `GridEngine` session via `GridEngine::set_palette`.
+///
+/// `background` is `None` for themes that want the terminal background to
+/// stay transparent (so the app's own background/dot-matrix pattern shows
+/// through — see `BACKGROUND`'s alpha-0 default) and `Some` only for
+/// themes with an opaque terminal background (the "light" category
+/// themes) — `GridEngine::set_palette` resets the live override rather
+/// than forcing opacity when it's `None`.
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ThemePalette {
+    /// Indices 0-15, matching `vte::ansi::NamedColor::Black..=BrightWhite`.
+    pub ansi16: [(u8, u8, u8); 16],
+    pub foreground: (u8, u8, u8),
+    pub background: Option<(u8, u8, u8)>,
+    pub cursor: (u8, u8, u8),
+}
+
+/// The palette `EngineManager` starts with before the frontend has pushed
+/// a theme (matches "Nothing Dark", the app's default theme, exactly).
+pub fn default_theme_palette() -> ThemePalette {
+    let mut ansi16 = [(0u8, 0u8, 0u8); 16];
+    for (slot, color) in ansi16.iter_mut().zip(ANSI_16.iter()) {
+        *slot = unpack(*color);
+    }
+    ThemePalette {
+        ansi16,
+        foreground: unpack(FOREGROUND),
+        background: None,
+        cursor: unpack(CURSOR),
+    }
 }
 
 #[cfg(test)]

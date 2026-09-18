@@ -14,6 +14,7 @@ type ShortcutHandlers = {
   onToggleSettings: () => void;
   onOpenWorkspace?: () => void;
   onSaveWorkspace?: () => void;
+  onCommandPalette?: () => void;
 };
 
 export function useKeyboardShortcuts({
@@ -29,6 +30,7 @@ export function useKeyboardShortcuts({
   onToggleSettings,
   onOpenWorkspace,
   onSaveWorkspace,
+  onCommandPalette,
 }: ShortcutHandlers) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -114,6 +116,13 @@ export function useKeyboardShortcuts({
         onSaveWorkspace?.();
         return;
       }
+
+      if (keybindings.command_palette && matchesKeyCombo(event, keybindings.command_palette)) {
+        event.preventDefault();
+        event.stopPropagation();
+        onCommandPalette?.();
+        return;
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown, { capture: true });
@@ -131,5 +140,6 @@ export function useKeyboardShortcuts({
     onToggleSettings,
     onOpenWorkspace,
     onSaveWorkspace,
+    onCommandPalette,
   ]);
 }

@@ -290,6 +290,67 @@ body,
   box-shadow: 0 0 8px rgba(255, 48, 48, 0.9);
 }
 
+.update-badge {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 26px;
+  padding-left: 2px;
+  border-radius: 6px;
+  border: 1px solid var(--nothing-red-bright);
+  background: rgba(215, 25, 33, 0.14);
+  margin-right: 6px;
+}
+
+.update-badge-action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 100%;
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  color: var(--glyph-fg);
+  font-family: var(--nothing-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  cursor: default;
+  border-radius: 5px 0 0 5px;
+  transition: background 120ms ease;
+}
+
+.update-badge-action:hover {
+  background: rgba(215, 25, 33, 0.28);
+}
+
+.update-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--nothing-red-bright);
+  box-shadow: 0 0 8px rgba(255, 48, 48, 0.85);
+  flex-shrink: 0;
+}
+
+.update-badge-dismiss {
+  width: 20px;
+  height: 100%;
+  border: none;
+  background: transparent;
+  color: var(--glyph-fg-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: default;
+  border-radius: 0 5px 5px 0;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.update-badge-dismiss:hover {
+  background: rgba(215, 25, 33, 0.28);
+  color: var(--glyph-fg);
+}
+
 .title-actions {
   height: 100%;
   display: flex;
@@ -1243,7 +1304,11 @@ body,
   top: 0;
   bottom: 0;
   right: 0;
-  width: 12px;
+  /* Narrower than handle-north/south (12px) so it clears the terminal
+     pane's scrollbar, which lives a few pixels further in from this same
+     edge — see .terminal-scrollbar-track's doc comment in terminal.css
+     for why overlap there isn't fixable with z-index alone. */
+  width: 6px;
   cursor: ew-resize;
   cursor: e-resize;
 }
@@ -1252,7 +1317,7 @@ body,
   top: 0;
   bottom: 0;
   left: 0;
-  width: 12px;
+  width: 6px;
   cursor: ew-resize;
   cursor: w-resize;
 }

@@ -44,6 +44,37 @@ pub struct Workspace {
     pub updated_at: i64,
 }
 
+/// One open tab's layout, for the auto-saved session (see `Session`) —
+/// shaped identically to `Workspace`'s `layout`/`panes` pair (reusing the
+/// exact same `WorkspaceLayoutNode`/`WorkspacePaneConfig` types and the
+/// frontend's existing `splitNodeToWorkspaceLayout`/`workspaceLayoutToSplitNode`
+/// converters) since a tab's structure is the same shape as a named
+/// workspace's — the only real difference is *how* it gets saved
+/// (automatically, on every structural change, rather than by explicit
+/// user action).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SessionTab {
+    pub title: String,
+    pub layout: WorkspaceLayoutNode,
+    pub panes: Vec<WorkspacePaneConfig>,
+}
+
+/// The whole window's open tabs, auto-saved on every structural change
+/// (new/closed tab, split, pane CWD change) and restored on the next
+/// launch — separate from user-named `Workspace`s, which are saved only
+/// by explicit action and never overwritten automatically. Stored as a
+/// single `session.json` file (see `WorkspaceManager::save_session`), not
+/// alongside the per-workspace files in the `workspaces/` directory, so it
+/// never appears in the user-facing workspace list.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Session {
+    pub tabs: Vec<SessionTab>,
+    pub active_tab_index: usize,
+    pub saved_at: i64,
+}
+
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspaceErrorPayload {

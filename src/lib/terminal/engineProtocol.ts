@@ -43,8 +43,31 @@ export const ALL_UNDERLINE_FLAGS =
   CellFlags.DOTTED_UNDERLINE |
   CellFlags.DASHED_UNDERLINE;
 
+// Bit layout of the header's `mouse_mode` byte, matching protocol.rs
+// `mouse_mode` — see that module's doc comment for the full explanation.
+export const enum MouseTrackingLevel {
+  Off = 0,
+  Click = 1,
+  Drag = 2,
+  AnyMotion = 3,
+}
+const MOUSE_TRACKING_MASK = 0b0000_0011;
+const MOUSE_SGR_BIT = 1 << 2;
+
+export interface MouseMode {
+  tracking: MouseTrackingLevel;
+  sgr: boolean;
+}
+
+export function decodeMouseMode(byte: number): MouseMode {
+  return {
+    tracking: (byte & MOUSE_TRACKING_MASK) as MouseTrackingLevel,
+    sgr: (byte & MOUSE_SGR_BIT) !== 0,
+  };
+}
+
 const MAGIC = 0x50_59_4c_47; // "GLYP" little-endian, matches protocol::MAGIC
-const HEADER_LEN = 24;
+const HEADER_LEN = 25;
 const ROW_HEADER_LEN = 8;
 const CELL_RECORD_LEN = 16;
 
@@ -72,6 +95,7 @@ export interface DecodedFrame {
   cursorVisible: boolean;
   displayOffset: number;
   totalLines: number;
+  mouseMode: MouseMode;
   rowRecords: DecodedRow[];
 }
 
@@ -90,7 +114,7 @@ export function decodeFrame(data: ArrayBuffer | Uint8Array): DecodedFrame {
     throw new Error(`engine frame: bad magic 0x${magic.toString(16)}`);
   }
   const version = view.getUint8(4);
-  if (version !== 1) {
+  if (version !== 2) {
     throw new Error(`engine frame: unsupported version ${version}`);
   }
 
@@ -103,6 +127,7 @@ export function decodeFrame(data: ArrayBuffer | Uint8Array): DecodedFrame {
   const cursorVisible = view.getUint8(15) !== 0;
   const displayOffset = view.getUint32(16, true);
   const totalLines = view.getUint32(20, true);
+  const mouseMode = decodeMouseMode(view.getUint8(24));
 
   const rowRecords: DecodedRow[] = [];
   let offset = HEADER_LEN;
@@ -154,6 +179,7 @@ export function decodeFrame(data: ArrayBuffer | Uint8Array): DecodedFrame {
     cursorVisible,
     displayOffset,
     totalLines,
+    mouseMode,
     rowRecords,
   };
 }

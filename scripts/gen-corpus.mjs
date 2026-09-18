@@ -101,13 +101,16 @@ addCase(
     "Combining: éclair\r\n",
   ].join(""),
   // KNOWN ISSUE, not fixed here: alacritty_terminal's unicode-width crate
-  // classifies emoji like the one above as single-width; xterm.js's
-  // internal width table classifies them double-width. Long-standing,
-  // known disagreement between terminal emulators' Unicode tables, not a
-  // bug in either parser — needs a deliberate decision before the
-  // renderer can claim emoji parity. See BENCH.md.
-  "alacritty_terminal's unicode-width crate classifies some emoji as " +
-    "single-width where xterm.js classifies them double-width \u2014 a known " +
+  // classifies emoji like the one above as double-width; xterm.js's
+  // internal width table classifies them single-width (and, unlike
+  // alacritty, does not widen a ZWJ emoji sequence like the "family" one
+  // above at all — it draws each member as its own single-width glyph
+  // rather than clustering or doubling them). Long-standing, known
+  // disagreement between terminal emulators' Unicode tables, not a bug in
+  // either parser — needs a deliberate decision before the renderer can
+  // claim emoji parity. See BENCH.md.
+  "alacritty_terminal's unicode-width crate classifies emoji as " +
+    "double-width where xterm.js classifies them single-width \u2014 a known " +
     "cross-engine Unicode table disagreement, not a parser bug. See BENCH.md.",
 );
 
@@ -151,11 +154,18 @@ addResizeCase(
   `${CSI}2J${CSI}H` + "A".repeat(70) + "\r\nEND",
   { cols: 20, rows: 8 },
   "",
-  "KNOWN BUG in alacritty_terminal 0.26.0's Grid::shrink_columns reflow: " +
-    "drops a whole row of content when a wrapped line must split across " +
-    "3+ new rows on shrink. See GridEngine's resize_tests module in " +
-    "grid_engine.rs for the minimal repro and detail. Not a bug in this " +
-    "test or in the Rust<->JS comparison — xterm.js reflows correctly.",
+  "Investigated as a suspected data-loss bug; direct instrumentation of " +
+    "alacritty_terminal 0.26.0's Grid::shrink_columns showed the content " +
+    "is never actually dropped (see GridEngine's resize_tests module in " +
+    "grid_engine.rs for the full corrected analysis). The real, confirmed " +
+    "difference: xterm.js reclaims blank rows below the content to fit a " +
+    "reflow's extra rows within the existing viewport height, while " +
+    "alacritty_terminal instead grows the buffer and lets the oldest " +
+    "reflowed row age into scrollback even when blank space below could " +
+    "have absorbed it — a real but low-severity inefficiency (an extra " +
+    "scroll to see recently-reflowed content), not lost data, and not " +
+    "worth the risk of patching alacritty_terminal's core reflow " +
+    "accounting to match xterm.js's approach.",
 );
 
 addCase(

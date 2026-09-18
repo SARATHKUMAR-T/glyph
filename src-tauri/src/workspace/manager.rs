@@ -6,12 +6,16 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use uuid::Uuid;
 
-use super::model::{Workspace, WorkspaceError, WorkspaceLayoutNode};
+use super::model::{Session, SessionTab, Workspace, WorkspaceError, WorkspaceLayoutNode};
 
 #[derive(Clone, Default)]
 pub struct WorkspaceManager {
     storage_dir: Arc<Mutex<Option<PathBuf>>>,
     memory_cache: Arc<Mutex<HashMap<String, Workspace>>>,
+    /// The single `session.json` file's path (see `Session`'s doc comment)
+    /// — deliberately separate from `storage_dir`, which holds one file per
+    /// user-named workspace.
+    session_path: Arc<Mutex<Option<PathBuf>>>,
 }
 
 impl WorkspaceManager {
@@ -20,6 +24,7 @@ impl WorkspaceManager {
         let manager = Self {
             storage_dir: Arc::new(Mutex::new(Some(storage_dir))),
             memory_cache: Arc::new(Mutex::new(HashMap::new())),
+            session_path: Arc::new(Mutex::new(None)),
         };
         let _ = manager.reload_from_disk();
         manager
@@ -30,6 +35,12 @@ impl WorkspaceManager {
             *storage = Some(dir);
         }
         let _ = self.reload_from_disk();
+    }
+
+    pub fn set_session_path(&self, path: PathBuf) {
+        if let Ok(mut session_path) = self.session_path.lock() {
+            *session_path = Some(path);
+        }
     }
 
     fn get_storage_dir(&self) -> Result<PathBuf, WorkspaceError> {
@@ -145,6 +156,110 @@ impl WorkspaceManager {
         Ok(())
     }
 
+    /// Overwrites `session.json` wholesale with `session` — the frontend
+    /// always sends the full current tab set (see `useSessionPersistence`),
+    /// so there's no incremental/merge case to handle, unlike per-workspace
+    /// saves which touch one file per workspace.
+    pub fn save_session(&self, session: &Session) -> Result<(), WorkspaceError> {
+        for tab in &session.tabs {
+            self.validate_session_tab(tab)?;
+        }
+
+        let path = self
+            .session_path
+            .lock()
+            .map_err(|_| WorkspaceError::Storage("Lock error".to_string()))?
+            .clone()
+            .ok_or_else(|| WorkspaceError::Storage("Session path not set".to_string()))?;
+
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| WorkspaceError::Storage(format!("Failed to create directory: {e}")))?;
+        }
+
+        let json_data = serde_json::to_string_pretty(session)
+            .map_err(|e| WorkspaceError::Storage(format!("Serialization error: {e}")))?;
+        fs::write(&path, json_data)
+            .map_err(|e| WorkspaceError::Storage(format!("File write error: {e}")))?;
+
+        Ok(())
+    }
+
+    /// `Ok(None)` covers both "no session file yet" (first-ever launch, or
+    /// the user cleared it) and a session file that fails to parse or
+    /// validate — a corrupt/stale session should fall back to a blank
+    /// startup tab rather than fail launch entirely.
+    pub fn load_session(&self) -> Result<Option<Session>, WorkspaceError> {
+        let path = self
+            .session_path
+            .lock()
+            .map_err(|_| WorkspaceError::Storage("Lock error".to_string()))?
+            .clone()
+            .ok_or_else(|| WorkspaceError::Storage("Session path not set".to_string()))?;
+
+        if !path.exists() {
+            return Ok(None);
+        }
+
+        let Ok(content) = fs::read_to_string(&path) else {
+            return Ok(None);
+        };
+        let Ok(session) = serde_json::from_str::<Session>(&content) else {
+            return Ok(None);
+        };
+
+        if session.tabs.iter().any(|tab| self.validate_session_tab(tab).is_err()) {
+            return Ok(None);
+        }
+
+        Ok(Some(session))
+    }
+
+    pub fn clear_session(&self) -> Result<(), WorkspaceError> {
+        let path = self
+            .session_path
+            .lock()
+            .map_err(|_| WorkspaceError::Storage("Lock error".to_string()))?
+            .clone()
+            .ok_or_else(|| WorkspaceError::Storage("Session path not set".to_string()))?;
+
+        if path.exists() {
+            fs::remove_file(path)
+                .map_err(|e| WorkspaceError::Storage(format!("File delete error: {e}")))?;
+        }
+
+        Ok(())
+    }
+
+    /// Same structural checks `validate_workspace` runs (pane ID
+    /// uniqueness, every pane referenced exactly once, valid split
+    /// direction/ratio) minus the "name must be non-empty" rule, which
+    /// doesn't apply to a tab's freeform title.
+    fn validate_session_tab(&self, tab: &SessionTab) -> Result<(), WorkspaceError> {
+        let mut pane_ids = HashSet::new();
+        for pane in &tab.panes {
+            if pane.id.trim().is_empty() {
+                return Err(WorkspaceError::Validation(
+                    "Pane ID cannot be empty".to_string(),
+                ));
+            }
+            if !pane_ids.insert(pane.id.clone()) {
+                return Err(WorkspaceError::DuplicatePaneId(pane.id.clone()));
+            }
+        }
+
+        let mut referenced_panes = HashSet::new();
+        self.validate_layout_node(&tab.layout, &pane_ids, &mut referenced_panes)?;
+
+        if referenced_panes.len() != pane_ids.len() {
+            return Err(WorkspaceError::Validation(
+                "Unreferenced pane definitions in session tab layout".to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
     pub fn validate_workspace(&self, workspace: &Workspace) -> Result<(), WorkspaceError> {
         if workspace.name.trim().is_empty() {
             return Err(WorkspaceError::Validation(
@@ -228,7 +343,7 @@ impl WorkspaceManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::workspace::model::{CommandConfig, WorkspacePaneConfig};
+    use crate::workspace::model::{CommandConfig, SessionTab, WorkspacePaneConfig};
     use std::path::PathBuf;
 
     fn temp_test_dir() -> PathBuf {
@@ -339,5 +454,71 @@ mod tests {
 
         let err = manager.save_workspace(ws).unwrap_err();
         assert!(matches!(err, WorkspaceError::Validation(_)));
+    }
+
+    fn sample_session() -> Session {
+        Session {
+            tabs: vec![SessionTab {
+                title: "Terminal 1".to_string(),
+                layout: WorkspaceLayoutNode::Pane {
+                    pane_id: "pane-1".to_string(),
+                },
+                panes: vec![WorkspacePaneConfig {
+                    id: "pane-1".to_string(),
+                    name: "Terminal 1".to_string(),
+                    cwd: Some("/home/user".to_string()),
+                    command: None,
+                }],
+            }],
+            active_tab_index: 0,
+            saved_at: 0,
+        }
+    }
+
+    #[test]
+    fn test_save_load_clear_session_round_trip() {
+        let dir = temp_test_dir();
+        let manager = WorkspaceManager::new(dir.clone());
+        manager.set_session_path(dir.join("session.json"));
+
+        assert_eq!(manager.load_session().unwrap(), None, "nothing saved yet");
+
+        let session = sample_session();
+        manager.save_session(&session).unwrap();
+        assert_eq!(manager.load_session().unwrap(), Some(session));
+
+        manager.clear_session().unwrap();
+        assert_eq!(manager.load_session().unwrap(), None);
+    }
+
+    #[test]
+    fn test_save_session_rejects_a_tab_with_duplicate_pane_ids() {
+        let dir = temp_test_dir();
+        let manager = WorkspaceManager::new(dir.clone());
+        manager.set_session_path(dir.join("session.json"));
+
+        let mut session = sample_session();
+        session.tabs[0].panes.push(WorkspacePaneConfig {
+            id: "pane-1".to_string(), // duplicate
+            name: "Duplicate".to_string(),
+            cwd: None,
+            command: None,
+        });
+
+        let err = manager.save_session(&session).unwrap_err();
+        assert!(matches!(err, WorkspaceError::DuplicatePaneId(_)));
+        // The rejected save must not have overwritten any prior session.
+        assert_eq!(manager.load_session().unwrap(), None);
+    }
+
+    #[test]
+    fn test_load_session_ignores_a_corrupt_file_instead_of_erroring() {
+        let dir = temp_test_dir();
+        let manager = WorkspaceManager::new(dir.clone());
+        let session_path = dir.join("session.json");
+        manager.set_session_path(session_path.clone());
+
+        std::fs::write(&session_path, "not valid json").unwrap();
+        assert_eq!(manager.load_session().unwrap(), None);
     }
 }

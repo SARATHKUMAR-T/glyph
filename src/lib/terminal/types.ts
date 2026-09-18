@@ -72,6 +72,19 @@ export type TerminalSemanticEvent = {
   exitCode?: number | null;
   raw: string;
   timestamp: number;
+  /** Frontend-only enrichment, never set by the Rust-emitted event itself —
+   * added by `GlyphEngineTerminalView`'s semantic listener on
+   * `command_execution_start` by reading the command line's text straight
+   * off the grid at the cursor's row. Powers the block rail's "re-run" and
+   * "copy command" actions. */
+  commandText?: string;
+  /** Frontend-only enrichment: the alacritty grid `Line` (can be negative —
+   * scrollback-relative, same space `engine_selection_range` expects) at
+   * this event's cursor position. `command_execution_start`'s value is a
+   * block's output-start bound, `command_finished`'s is its output-end
+   * bound — both approximate (the cursor's row at the moment the boundary
+   * fired), not byte-exact. */
+  gridLine?: number;
 };
 
 export type TerminalBlockStatus = "running" | "success" | "error" | "interrupted";
@@ -85,4 +98,9 @@ export type TerminalBlock = {
   exitCode?: number | null;
   startedAt: number;
   finishedAt?: number;
+  /** See `TerminalSemanticEvent.gridLine` — the pair of grid lines
+   * bounding this block's output, for "Copy output" via
+   * `engine_selection_range`. Unset until both boundary events land. */
+  outputStartLine?: number;
+  outputEndLine?: number;
 };

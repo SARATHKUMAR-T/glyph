@@ -1,15 +1,20 @@
 import { useEffect } from "react";
-import type { ITheme } from "@xterm/xterm";
+import { invoke } from "@tauri-apps/api/core";
 
-import { getTheme, DEFAULT_THEME_ID } from "../lib/terminal/themes";
+import { getTheme, themeToEnginePalette, DEFAULT_THEME_ID } from "../lib/terminal/themes";
 import type { ThemeId } from "../lib/terminal/themes";
+import { isTauriRuntime } from "../lib/terminal/events";
 
 /**
- * Applies the active theme's CSS custom properties to <html> (so all
- * CSS that uses var(--glyph-*) picks up the new values automatically)
- * and returns the xterm.js ITheme to pass to each terminal instance.
+ * Applies the active theme's CSS custom properties to <html> so all CSS
+ * that uses var(--glyph-*) — including the terminal grid renderer, which
+ * reads them directly (see CanvasGridRenderer's `themeColor`) — picks up
+ * the new values automatically. Also pushes the theme's ANSI palette to
+ * every running terminal session (`engine_set_palette`), so program
+ * output (`ls --color`, vim, etc.) recolors along with the rest of the
+ * UI instead of staying on the engine's default "Nothing Dark" palette.
  */
-export function useTerminalTheme(themeId: ThemeId = DEFAULT_THEME_ID): ITheme {
+export function useTerminalTheme(themeId: ThemeId = DEFAULT_THEME_ID): void {
   const theme = getTheme(themeId);
 
   useEffect(() => {
@@ -27,8 +32,12 @@ export function useTerminalTheme(themeId: ThemeId = DEFAULT_THEME_ID): ITheme {
     // Expose the theme id and category as data attributes for any CSS selectors that need it
     root.dataset.glyphTheme = themeId;
     root.dataset.glyphThemeCategory = theme.category;
-  }, [theme, themeId]);
 
-  return theme.xtermTheme;
+    if (isTauriRuntime()) {
+      void invoke("engine_set_palette", { palette: themeToEnginePalette(theme) }).catch((error: unknown) => {
+        console.error("[useTerminalTheme] failed to push palette to the engine:", error);
+      });
+    }
+  }, [theme, themeId]);
 }
 

@@ -9,7 +9,6 @@ use crate::events::terminal_events::{
     TerminalErrorEvent, TerminalExitEvent, TerminalStateEvent, ERROR_EVENT, EXIT_EVENT, STATE_EVENT,
 };
 
-use super::engine::manager::engine_enabled;
 use super::engine::EngineManager;
 use super::pty::spawn_shell;
 use super::reader::{spawn_reader_thread, timestamp_millis};
@@ -52,13 +51,11 @@ impl TerminalManager {
             .map_err(|_| TerminalError::StateUnavailable)?
             .insert(session_id.clone(), session);
 
-        if engine_enabled() {
-            app.state::<EngineManager>().create_session(
-                session_id.clone(),
-                spawned.size.cols,
-                spawned.size.rows,
-            );
-        }
+        app.state::<EngineManager>().create_session(
+            session_id.clone(),
+            spawned.size.cols,
+            spawned.size.rows,
+        );
 
         spawn_reader_thread(
             app.clone(),
@@ -116,10 +113,8 @@ impl TerminalManager {
             .map_err(|error| TerminalError::PtyResize(error.to_string()))?;
         session.size = size;
 
-        if engine_enabled() {
-            app.state::<EngineManager>()
-                .resize(session_id, size.cols, size.rows);
-        }
+        app.state::<EngineManager>()
+            .resize(session_id, size.cols, size.rows);
 
         Ok(())
     }
@@ -139,9 +134,7 @@ impl TerminalManager {
             return Err(TerminalError::SessionNotFound(session_id.to_string()));
         };
 
-        if engine_enabled() {
-            app.state::<EngineManager>().remove_session(session_id);
-        }
+        app.state::<EngineManager>().remove_session(session_id);
 
         session
             .killer

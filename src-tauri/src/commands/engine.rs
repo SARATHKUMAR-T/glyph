@@ -2,24 +2,9 @@ use serde::{Deserialize, Serialize};
 use tauri::ipc::Channel;
 use tauri::State;
 
-use crate::terminal::engine::grid_engine::{SearchDirection, SearchMatch};
-use crate::terminal::engine::manager::engine_enabled;
+use crate::terminal::engine::grid_engine::{CursorStyleOption, SearchDirection, SearchMatch};
+use crate::terminal::engine::palette::ThemePalette;
 use crate::terminal::engine::EngineManager;
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct EngineStatus {
-    pub enabled: bool,
-}
-
-/// Whether the Rust grid engine is running for newly created sessions.
-/// Lets the frontend decide whether it's worth asking for frames at all.
-#[tauri::command(rename_all = "camelCase")]
-pub fn engine_status() -> EngineStatus {
-    EngineStatus {
-        enabled: engine_enabled(),
-    }
-}
 
 /// Start streaming binary damage frames (see `terminal::engine::protocol`)
 /// for `session_id` over `channel`.
@@ -30,6 +15,35 @@ pub fn engine_attach_channel(
     channel: Channel,
 ) {
     manager.attach_channel(session_id, channel);
+}
+
+/// Feeds bytes into a session's `GridEngine` directly — bypassing the PTY
+/// entirely, so this is visible only in the terminal display, never to the
+/// actual shell process. Used for locally-rendered content the shell never
+/// produced (e.g. the `quote` built-in's spinner/output;
+/// `GlyphEngineTerminalView` clears the shell's real input line separately
+/// via `write_terminal` so the two don't collide).
+#[tauri::command(rename_all = "camelCase")]
+pub fn engine_feed_local(manager: State<'_, EngineManager>, session_id: String, data: String) {
+    manager.feed(&session_id, data.as_bytes());
+}
+
+/// Applies a theme's colors to every open terminal session (and stores it
+/// as the default for sessions created afterward) — see
+/// `EngineManager::set_palette`. Called whenever the frontend's active
+/// theme changes.
+#[tauri::command(rename_all = "camelCase")]
+pub fn engine_set_palette(manager: State<'_, EngineManager>, palette: ThemePalette) {
+    manager.set_palette(palette);
+}
+
+/// Applies the user's cursor-style preference (block/bar/underline) to
+/// every open terminal session (and stores it as the default for sessions
+/// created afterward) — see `EngineManager::set_cursor_style`. Called
+/// whenever the frontend's `cursorStyle` setting changes.
+#[tauri::command(rename_all = "camelCase")]
+pub fn engine_set_cursor_style(manager: State<'_, EngineManager>, style: CursorStyleOption) {
+    manager.set_cursor_style(style);
 }
 
 #[derive(Serialize)]
@@ -95,10 +109,13 @@ pub fn engine_clear_selection(manager: State<'_, EngineManager>, session_id: Str
     manager.clear_selection(&session_id);
 }
 
-/// Finds the next/previous match of `pattern` (plain text, not regex — see
-/// `escape_regex` in grid_engine.rs) starting from an absolute row (0 =
-/// top of scrollback). On a hit, scrolls the match into view as a side
-/// effect, matching the existing xterm.js search UI's behaviour.
+/// Finds the next/previous match of `pattern`, starting from an absolute
+/// row (0 = top of scrollback). On a hit, scrolls the match into view as a
+/// side effect, matching the existing xterm.js search UI's behaviour.
+/// `regex` opts into treating `pattern` as a regular expression instead of
+/// literal text (see `GridEngine::search_with_mode`); an invalid pattern in
+/// that mode surfaces as an `Err` the frontend shows inline rather than a
+/// silent "no match".
 #[tauri::command(rename_all = "camelCase")]
 pub fn engine_search(
     manager: State<'_, EngineManager>,
@@ -107,6 +124,7 @@ pub fn engine_search(
     direction: SearchDirection,
     from_row: usize,
     from_col: usize,
-) -> Option<SearchMatch> {
-    manager.search(&session_id, &pattern, direction, from_row, from_col)
+    regex: bool,
+) -> Result<Option<SearchMatch>, String> {
+    manager.search(&session_id, &pattern, direction, from_row, from_col, regex)
 }
