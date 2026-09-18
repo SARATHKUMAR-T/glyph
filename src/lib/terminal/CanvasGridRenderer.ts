@@ -12,6 +12,7 @@ import {
   type MouseMode,
 } from "./engineProtocol";
 import type { GridRenderer, SelectionRange } from "./GridRenderer";
+import { parseCssColorToFloat, pickReadableColor, rgbaToCss } from "./contrast";
 
 interface RendererOptions {
   fontFamily: string;
@@ -304,7 +305,7 @@ export class CanvasGridRenderer implements GridRenderer {
         continue;
       }
       const isWide = (cell.flags & CellFlags.WIDE_CHAR) !== 0;
-      const styleKey = this.styleKey(cell);
+      const styleKey = this.styleKey(cell, row, col);
 
       if (isWide) {
         this.drawRun(base, col, col + 1, styleKey);
@@ -316,7 +317,7 @@ export class CanvasGridRenderer implements GridRenderer {
       while (
         end < cols &&
         !(this.grid[base + end].flags & (CellFlags.WIDE_CHAR | CellFlags.WIDE_CHAR_SPACER)) &&
-        this.styleKey(this.grid[base + end]) === styleKey
+        this.styleKey(this.grid[base + end], row, end) === styleKey
       ) {
         end++;
       }
@@ -396,8 +397,28 @@ export class CanvasGridRenderer implements GridRenderer {
     return packedColorToCss(packed);
   }
 
-  private styleKey(cell: DecodedCell): string {
-    return `${this.resolvedFg(cell)}|${cell.flags & (CellFlags.BOLD | CellFlags.ITALIC | CellFlags.DIM | CellFlags.INVERSE | CellFlags.HIDDEN)}`;
+  private styleKey(cell: DecodedCell, row: number, col: number): string {
+    return `${this.effectiveFg(cell, row, col)}|${cell.flags & (CellFlags.BOLD | CellFlags.ITALIC | CellFlags.DIM | CellFlags.INVERSE | CellFlags.HIDDEN)}`;
+  }
+
+  /** `resolvedFg`, except inside a plain selection it swaps in plain black
+   * or white when the cell's own color wouldn't have enough contrast
+   * against the actual composited selection highlight — see contrast.ts. */
+  private effectiveFg(cell: DecodedCell, row: number, col: number): string {
+    const fgCss = this.resolvedFg(cell);
+    const selCols = this.selectionColsForRow(row);
+    const inPlainSelection = selCols && this.selection?.kind !== "search" && col >= selCols[0] && col < selCols[1];
+    if (!inPlainSelection) return fgCss;
+
+    const cellBgCss = this.resolvedBg(cell);
+    const effectiveCellBgCss = isTransparent(cellBgCss) ? this.themeColor("--glyph-bg", "#000000") : cellBgCss;
+    const selectionBgCss = this.themeColor("--glyph-selection-bg", "rgba(255, 48, 48, 0.35)");
+
+    const fg = parseCssColorToFloat(fgCss);
+    const cellBg = parseCssColorToFloat(effectiveCellBgCss);
+    const selectionBg = parseCssColorToFloat(selectionBgCss);
+    const picked = pickReadableColor(fg, [cellBg[0], cellBg[1], cellBg[2]], selectionBg);
+    return picked === fg ? fgCss : rgbaToCss(picked);
   }
 
   private drawRun(base: number, startCol: number, endCol: number, _styleKey: string) {
@@ -415,16 +436,17 @@ export class CanvasGridRenderer implements GridRenderer {
     const bold = (cell.flags & CellFlags.BOLD) !== 0;
     const italic = (cell.flags & CellFlags.ITALIC) !== 0;
     const dim = (cell.flags & CellFlags.DIM) !== 0;
+    const fillColor = this.effectiveFg(cell, row, startCol);
 
     ctx.font = `${italic ? "italic " : ""}${bold ? "700" : "400"} ${this.opts.fontSize}px ${this.opts.fontFamily}`;
     ctx.textBaseline = "alphabetic";
     ctx.globalAlpha = dim ? 0.65 : 1;
-    ctx.fillStyle = this.resolvedFg(cell);
+    ctx.fillStyle = fillColor;
     ctx.fillText(text, x, y + baseline);
     ctx.globalAlpha = 1;
 
     if (cell.flags & ALL_UNDERLINE_FLAGS) {
-      ctx.strokeStyle = this.resolvedFg(cell);
+      ctx.strokeStyle = fillColor;
       ctx.lineWidth = 1;
       const uy = y + baseline + 2.5;
       ctx.beginPath();
@@ -448,7 +470,7 @@ export class CanvasGridRenderer implements GridRenderer {
     }
 
     if (cell.flags & CellFlags.STRIKETHROUGH) {
-      ctx.strokeStyle = this.resolvedFg(cell);
+      ctx.strokeStyle = fillColor;
       ctx.lineWidth = 1;
       const sy = y + baseline - cellHeight * 0.28;
       ctx.beginPath();
