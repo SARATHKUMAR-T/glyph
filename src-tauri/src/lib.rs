@@ -28,6 +28,7 @@ pub fn run() {
     let result = tauri::Builder::default()
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_process::init())
         .manage(TerminalManager::default())
         .manage(EngineManager::default())
         .manage(SystemMonitorState::default())

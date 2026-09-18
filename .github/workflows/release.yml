@@ -25,9 +25,10 @@ jobs:
           TAG="${GITHUB_REF_NAME#v}"
           CONF_VERSION="$(node -p "require('./src-tauri/tauri.conf.json').version")"
           PKG_VERSION="$(node -p "require('./package.json').version")"
-          if [ "$TAG" != "$CONF_VERSION" ] || [ "$TAG" != "$PKG_VERSION" ]; then
-            echo "::error::Tag v$TAG doesn't match tauri.conf.json ($CONF_VERSION) / package.json ($PKG_VERSION)." \
-                 "Bump both files to $TAG, commit, then re-tag."
+          CARGO_VERSION="$(grep -m1 '^version' src-tauri/Cargo.toml | sed -E 's/version *= *"([^"]+)"/\1/')"
+          if [ "$TAG" != "$CONF_VERSION" ] || [ "$TAG" != "$PKG_VERSION" ] || [ "$TAG" != "$CARGO_VERSION" ]; then
+            echo "::error::Tag v$TAG doesn't match tauri.conf.json ($CONF_VERSION) / package.json ($PKG_VERSION) / Cargo.toml ($CARGO_VERSION)." \
+                 "Bump all three files to $TAG, commit, then re-tag."
             exit 1
           fi
           echo "version=$TAG" >> "$GITHUB_OUTPUT"

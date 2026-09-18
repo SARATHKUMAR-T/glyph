@@ -18,6 +18,7 @@
     "core:webview:allow-internal-toggle-devtools",
     "clipboard-manager:allow-read-text",
     "clipboard-manager:allow-write-text",
-    "notification:default"
+    "notification:default",
+    "process:allow-restart"
   ]
 }
