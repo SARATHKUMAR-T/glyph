@@ -15,7 +15,8 @@ export type ShortcutAction =
   | "select_all"
   | "toggle_settings"
   | "open_workspace"
-  | "save_workspace";
+  | "save_workspace"
+  | "command_palette";
 
 export type KeyCombo = {
   key: string;
@@ -43,6 +44,7 @@ export const DEFAULT_KEYBINDINGS: KeybindingsConfig = {
   toggle_settings: { key: ",", ctrl: true, alt: false, shift: false, meta: false },
   open_workspace: { key: "m", ctrl: true, alt: false, shift: true, meta: false },
   save_workspace: { key: "s", ctrl: true, alt: false, shift: true, meta: false },
+  command_palette: { key: "p", ctrl: true, alt: false, shift: true, meta: false },
 };
 
 export const ACTION_LABELS: Record<ShortcutAction, { label: string; description: string }> = {
@@ -61,6 +63,7 @@ export const ACTION_LABELS: Record<ShortcutAction, { label: string; description:
   toggle_settings: { label: "Toggle Settings", description: "Open or close Settings panel" },
   open_workspace: { label: "Open Workspaces Menu", description: "Open Workspaces list / manager" },
   save_workspace: { label: "Save Current Workspace", description: "Save active layout as a workspace" },
+  command_palette: { label: "Command Palette", description: "Search and run any Glyph command" },
 };
 
 const STORAGE_KEY = "glyph_keybindings_v5";

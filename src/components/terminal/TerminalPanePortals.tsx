@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
-import type { ITheme } from "@xterm/xterm";
 
 import type {
   TerminalBlock as TerminalBlockModel,
@@ -11,7 +10,7 @@ import type {
 } from "../../lib/terminal/types";
 import type { KeybindingsConfig } from "../../hooks/useKeybindings";
 import type { TerminalSettings } from "../../hooks/useTerminalSettings";
-import { TerminalView } from "./TerminalView";
+import { GlyphEngineTerminalView } from "./GlyphEngineTerminalView";
 
 type TerminalPanePortalsProps = {
   activeTab: boolean;
@@ -27,8 +26,6 @@ type TerminalPanePortalsProps = {
   isWindowMaximized?: boolean;
   searchOpen: boolean;
   settings?: TerminalSettings;
-  /** Active xterm palette from useTerminalTheme — threaded into every pane */
-  xtermTheme?: ITheme;
   tabId: string;
   onActivatePane: (paneId: string) => void;
   onClosePane?: (paneId: string) => void;
@@ -51,15 +48,16 @@ type TerminalPanePortalsProps = {
 };
 
 /**
- * Renders all TerminalView instances for a tab using React portals into
- * stable container elements. This prevents React from unmounting terminals
- * when the split tree structure changes (e.g. when splitting a pane).
+ * Renders all GlyphEngineTerminalView instances for a tab using React
+ * portals into stable container elements. This prevents React from
+ * unmounting terminals when the split tree structure changes (e.g. when
+ * splitting a pane).
  *
- * Each TerminalView is rendered into a persistent container div that is
- * imperatively reparented (via DOM appendChild) into the matching
+ * Each GlyphEngineTerminalView is rendered into a persistent container div
+ * that is imperatively reparented (via DOM appendChild) into the matching
  * `[data-pane-target]` placeholder rendered by TerminalSplitView.
  * Because the portal container is stable, React never unmounts the
- * TerminalView — only the physical DOM location changes.
+ * terminal view — only the physical DOM location changes.
  */
 export function TerminalPanePortals({
   activeTab,
@@ -90,12 +88,12 @@ export function TerminalPanePortals({
   paneCount,
   searchOpen,
   settings,
-  xtermTheme,
   tabId,
 }: TerminalPanePortalsProps) {
   // Stable container elements keyed by paneId.
   // These are never recreated for a given paneId, which means
-  // the TerminalView rendered inside (via createPortal) is never unmounted.
+  // the GlyphEngineTerminalView rendered inside (via createPortal) is
+  // never unmounted.
   const containersRef = useRef(new Map<string, HTMLDivElement>());
 
   // Lazily create containers for any new panes.
@@ -145,7 +143,7 @@ export function TerminalPanePortals({
         didReparent = true;
       }
     }
-    // After reparenting, force xterm instances to recalculate their
+    // After reparenting, force terminal instances to recalculate their
     // dimensions since their host containers may have changed size.
     if (didReparent) {
       requestAnimationFrame(() => {
@@ -162,7 +160,7 @@ export function TerminalPanePortals({
     if (expandedPaneId) {
       const timer = setTimeout(() => {
         const container = containersRef.current.get(expandedPaneId);
-        const textarea = container?.querySelector<HTMLTextAreaElement>(".xterm-helper-textarea");
+        const textarea = container?.querySelector<HTMLTextAreaElement>(".glyph-canvas-input-sink");
         textarea?.focus();
       }, 60);
       return () => clearTimeout(timer);
@@ -176,7 +174,7 @@ export function TerminalPanePortals({
         if (!container) return null;
         const isPaneActive = pane.paneId === activePaneId;
         return createPortal(
-          <TerminalView
+          <GlyphEngineTerminalView
             key={pane.paneId}
             active={activeTab}
             blocks={blocksByPane[pane.paneId] ?? []}
@@ -207,7 +205,6 @@ export function TerminalPanePortals({
             pane={pane}
             searchOpen={searchOpen}
             settings={settings}
-            xtermTheme={xtermTheme}
             tabId={tabId}
           />,
           container,

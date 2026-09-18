@@ -188,8 +188,9 @@ Windows and macOS support are planned for future releases.
 
   **Vite**                            Frontend development and bundling
 
-  **xterm.js**                        Terminal rendering and terminal
-                                      interaction
+  **Rust GridEngine +**                Custom VT parser/grid state and a
+  **WebGL2/Canvas2D**                  WebGL2 (Canvas2D fallback) renderer
+                                      for terminal rendering and interaction
 
   **portable-pty**                    Native PTY and shell management
   -----------------------------------------------------------------------
@@ -206,16 +207,18 @@ React / TypeScript
   ├─ Panes
   ├─ Settings
   ├─ Shortcuts
-  └─ xterm.js
+  └─ WebGL2GridRenderer / CanvasGridRenderer
         │
-        │ Tauri IPC
+        │ Tauri IPC (commands + binary frame Channel)
         ▼
 Rust / Tauri
-  └─ TerminalManager
-      ├─ portable-pty
-      ├─ Reader thread
-      ├─ Shell lifecycle
-      └─ OSC 133 parser
+  ├─ TerminalManager
+  │   ├─ portable-pty
+  │   ├─ Reader thread
+  │   ├─ Shell lifecycle
+  │   └─ OSC 133 parser
+  └─ EngineManager
+      └─ GridEngine (VT parser, grid + scrollback state)
         │
         ▼
 Linux PTY / System Shell
@@ -225,11 +228,15 @@ Linux PTY / System Shell
 ### Terminal flow
 
 1.  React requests a new terminal session through Tauri IPC.
-2.  Rust creates a native PTY using `portable-pty`.
+2.  Rust creates a native PTY using `portable-pty` and a matching
+    `GridEngine` session.
 3.  The user's system shell is launched inside the PTY.
-4.  A background Rust reader receives terminal output.
-5.  Rust emits terminal output and semantic events to the frontend.
-6.  xterm.js renders the terminal.
+4.  A background Rust reader receives terminal output, feeds it into the
+    `GridEngine`, and emits semantic events to the frontend.
+5.  A flush thread streams binary damage frames from the `GridEngine`
+    over a Tauri `Channel` whenever the grid changes.
+6.  `WebGL2GridRenderer` (falling back to `CanvasGridRenderer`) paints
+    each frame onto the pane's canvas.
 7.  Keyboard input is sent from the frontend through Tauri back to the
     PTY.
 8.  PTY resizing is propagated whenever the terminal viewport changes.

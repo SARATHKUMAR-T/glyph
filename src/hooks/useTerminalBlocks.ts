@@ -15,6 +15,8 @@ function reduceBlocks(blocks: TerminalBlock[], event: TerminalSemanticEvent): Te
         sessionId: event.sessionId,
         status: "running",
         startedAt: event.timestamp,
+        command: event.commandText,
+        outputStartLine: event.gridLine,
       },
     ];
   }
@@ -37,6 +39,7 @@ function reduceBlocks(blocks: TerminalBlock[], event: TerminalSemanticEvent): Te
         exitCode: event.exitCode,
         startedAt: finishedAt,
         finishedAt,
+        outputEndLine: event.gridLine,
       },
     ];
   }
@@ -49,6 +52,7 @@ function reduceBlocks(blocks: TerminalBlock[], event: TerminalSemanticEvent): Te
           status,
           exitCode: event.exitCode,
           finishedAt,
+          outputEndLine: event.gridLine,
         }
       : block,
   );

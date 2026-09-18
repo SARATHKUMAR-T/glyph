@@ -16,6 +16,7 @@ export type TerminalSettings = {
   cursorBlink: boolean;
   fontSize: number;
   showPerformanceBar: boolean;
+  restoreTabsOnRestart: boolean;
 };
 
 const DEFAULT_SETTINGS: TerminalSettings = {
@@ -29,27 +30,35 @@ const DEFAULT_SETTINGS: TerminalSettings = {
   cursorBlink: true,
   fontSize: 14,
   showPerformanceBar: true,
+  restoreTabsOnRestart: true,
 };
 
 const STORAGE_KEY = "glyph_terminal_settings_v8";
 
-export function useTerminalSettings() {
-  const [settings, setSettings] = useState<TerminalSettings>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved) as Partial<TerminalSettings>;
-        // Migrate legacy matrixStyle value
-        if ((parsed as Record<string, unknown>).matrixStyle === "red-pulse") {
-          parsed.matrixStyle = "matrix-rain";
-        }
-        return { ...DEFAULT_SETTINGS, ...parsed };
+/** Reads the persisted settings synchronously from `localStorage`, outside
+ * of React — used by `resolveInitialSession` in `main.tsx`, which runs
+ * before the component tree (and this hook) exists, so it needs the same
+ * "should I restore tabs" answer `useTerminalSettings` itself would give
+ * without being able to call the hook. */
+export function readStoredSettings(): TerminalSettings {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved) as Partial<TerminalSettings>;
+      // Migrate legacy matrixStyle value
+      if ((parsed as Record<string, unknown>).matrixStyle === "red-pulse") {
+        parsed.matrixStyle = "matrix-rain";
       }
-    } catch {
-      // Fall back to defaults
+      return { ...DEFAULT_SETTINGS, ...parsed };
     }
-    return DEFAULT_SETTINGS;
-  });
+  } catch {
+    // Fall back to defaults
+  }
+  return DEFAULT_SETTINGS;
+}
+
+export function useTerminalSettings() {
+  const [settings, setSettings] = useState<TerminalSettings>(readStoredSettings);
 
   useEffect(() => {
     try {

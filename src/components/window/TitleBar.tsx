@@ -2,7 +2,9 @@ import { APP_NAME } from "../../lib/constants";
 import { WindowControls } from "./WindowControls";
 import { PerformanceBar } from "../ui/PerformanceBar";
 import { WorkspacesMenu } from "../workspace/WorkspacesMenu";
+import { UpdateBadge } from "./UpdateBadge";
 import type { Workspace } from "../../lib/workspace/types";
+import type { UpdateInfo } from "../../lib/update/types";
 
 type TitleBarProps = {
   onNewTerminal?: () => void;
@@ -15,6 +17,9 @@ type TitleBarProps = {
   onCreateWorkspace?: () => void;
   onSaveCurrentWorkspace?: () => void;
   onManageWorkspaces?: () => void;
+  availableUpdate?: UpdateInfo | null;
+  onApplyUpdate?: (update: UpdateInfo) => void;
+  onDismissUpdate?: () => void;
 };
 
 export function TitleBar({
@@ -28,6 +33,9 @@ export function TitleBar({
   onCreateWorkspace,
   onSaveCurrentWorkspace,
   onManageWorkspaces,
+  availableUpdate,
+  onApplyUpdate,
+  onDismissUpdate,
 }: TitleBarProps) {
   return (
     <header className="title-bar-container" data-tauri-drag-region>
@@ -42,6 +50,13 @@ export function TitleBar({
           </div>
         </div>
         <div className="title-actions">
+          {availableUpdate && onApplyUpdate && onDismissUpdate && (
+            <UpdateBadge
+              update={availableUpdate}
+              onApply={() => onApplyUpdate(availableUpdate)}
+              onDismiss={onDismissUpdate}
+            />
+          )}
           {workspaces && onOpenWorkspace && (
             <WorkspacesMenu
               workspaces={workspaces}

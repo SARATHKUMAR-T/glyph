@@ -1,3 +1,4 @@
+pub mod engine;
 pub mod manager;
 pub mod osc133;
 pub mod pty;

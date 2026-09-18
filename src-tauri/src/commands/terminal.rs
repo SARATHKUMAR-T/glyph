@@ -28,21 +28,25 @@ pub fn write_terminal(
 
 #[tauri::command(rename_all = "camelCase")]
 pub fn resize_terminal(
+    app: AppHandle,
     manager: State<'_, TerminalManager>,
     session_id: String,
     request: ResizeTerminalRequest,
 ) -> Result<(), TerminalErrorPayload> {
     manager
-        .resize_terminal(&session_id, request)
+        .resize_terminal(&app, &session_id, request)
         .map_err(Into::into)
 }
 
 #[tauri::command(rename_all = "camelCase")]
 pub fn close_terminal(
+    app: AppHandle,
     manager: State<'_, TerminalManager>,
     session_id: String,
 ) -> Result<CloseTerminalResponse, TerminalErrorPayload> {
-    manager.close_terminal(&session_id).map_err(Into::into)
+    manager
+        .close_terminal(&app, &session_id)
+        .map_err(Into::into)
 }
 
 #[tauri::command(rename_all = "camelCase")]

@@ -1,6 +1,6 @@
 # Glyph Terminal - Project Overview & Technical Architecture
 
-**Glyph** is a modern, Nothing OS-inspired Linux desktop terminal emulator built with high-performance desktop technologies (Tauri v2, Rust, React 19, TypeScript, xterm.js, and portable-pty).
+**Glyph** is a modern, Nothing OS-inspired Linux desktop terminal emulator built with high-performance desktop technologies (Tauri v2, Rust, React 19, TypeScript, and portable-pty), rendering the terminal grid itself through a custom Rust VT engine and a WebGL2/Canvas2D frontend renderer.
 
 ---
 
@@ -10,11 +10,10 @@
 - **Framework**: React 19 (`react`, `react-dom`)
 - **Language**: TypeScript (`^5.0`)
 - **Build Tool / Bundler**: Vite 8 (`vite`)
-- **Terminal Emulator Core**:
-  - `@xterm/xterm` (v6.0) - High-performance canvas-based terminal rendering engine
-  - `@xterm/addon-fit` - Auto-calculates row and column dimensions according to container bounds
-  - `@xterm/addon-search` - In-memory scrollback buffer search
-  - `@xterm/addon-webgl` - Hardware-accelerated WebGL rendering
+- **Terminal Rendering**:
+  - `WebGL2GridRenderer` (`src/lib/terminal/WebGL2GridRenderer.ts`) - Glyph-atlas + instanced-quad WebGL2 renderer, tried first
+  - `CanvasGridRenderer` (`src/lib/terminal/CanvasGridRenderer.ts`) - Canvas2D fallback used when WebGL2 is unavailable
+  - Both consume the same binary damage-frame format streamed from the Rust `GridEngine` over a Tauri `Channel`, and implement the shared `GridRenderer` interface (grid state, selection, scrollback, mouse mode)
 - **State Management & Hooks**: Custom React hooks (`useTerminalSession`, `useTerminalBlocks`, `useTerminalSettings`, `useKeybindings`, `useKeyboardShortcuts`)
 
 ### Backend & Native Integration (Rust / Tauri v2)
@@ -34,9 +33,9 @@
 
 ```mermaid
 sequenceDiagram
-    participant FE as React Frontend (xterm.js)
+    participant FE as React Frontend (GlyphEngineTerminalView)
     participant IPC as Tauri IPC Bridge
-    participant Backend as Rust Backend (Manager)
+    participant Backend as Rust Backend (Manager + GridEngine)
     participant PTY as Linux PTY / Shell (/bin/bash)
 
     %% Session Creation
@@ -45,20 +44,27 @@ sequenceDiagram
     Backend->>Backend: Resolve CWD (e.g., /proc/{pid}/cwd)
     Backend->>PTY: spawn_shell() via portable-pty
     PTY-->>Backend: SpawnedPty (master, reader, writer, pid)
-    Backend->>Backend: Spawn Reader & Waiter Threads
+    Backend->>Backend: Spawn Reader & Waiter Threads; create GridEngine session
     Backend-->>FE: TerminalSessionInfo (sessionId, shell, cols, rows, cwd, pid)
+    FE->>IPC: invoke("engine_attach_channel", { sessionId, channel })
 
     %% Output Flow
     loop PTY Reader Thread
         PTY->>Backend: Read stdout/stderr bytes
         Backend->>Backend: Parse OSC 133 Shell Integration
-        Backend->>IPC: emit("terminal:output") & emit("terminal:semantic")
-        IPC->>FE: listenTerminalOutput() & listenTerminalSemantic()
-        FE->>FE: xterm.write(data)
+        Backend->>Backend: Feed bytes into GridEngine (VT parser + grid state)
+        Backend->>IPC: emit("terminal:semantic")
+    end
+
+    loop Flush Thread (~4ms cadence)
+        Backend->>Backend: GridEngine.build_frame() if the grid is damaged
+        Backend->>IPC: channel.send(binary damage frame)
+        IPC->>FE: renderer.applyFrameBytes(frame)
+        FE->>FE: WebGL2GridRenderer/CanvasGridRenderer repaints the canvas
     end
 
     %% Input Flow
-    FE->>FE: Keypress / Paste Event in xterm
+    FE->>FE: Keypress / Paste Event on the canvas' hidden input sink
     FE->>IPC: invoke("write_terminal", { sessionId, data })
     IPC->>Backend: write_terminal(&session_id, bytes)
     Backend->>PTY: Write bytes to PTY stdin
@@ -73,15 +79,15 @@ sequenceDiagram
    - Rust spawns a background thread dedicated to reading stdout/stderr streams from the master PTY.
 
 2. **Data Streaming & Shell Integration**:
-   - The reader thread parses raw byte streams for ANSI escape sequences and **OSC 133** shell integration events (`PromptStart`, `CommandExecutionStart`, `CommandFinished`).
-   - Events and output chunks are emitted to the webview asynchronously via Tauri events (`terminal:output`, `terminal:semantic`).
-   - The React frontend receives output and renders it via xterm.js while building structured execution blocks.
+   - The reader thread parses raw byte streams for **OSC 133** shell integration events (`PromptStart`, `CommandExecutionStart`, `CommandFinished`), emitted to the webview as `terminal:semantic` events for building structured execution blocks.
+   - The same bytes are fed into the Rust `GridEngine` (`src-tauri/src/terminal/engine`), which owns the VT parser and grid/scrollback state.
+   - A separate flush thread polls each session's `GridEngine` roughly every 4ms and, if the grid is damaged, streams a compact binary frame over a Tauri `Channel` (`engine_attach_channel`) — no JSON/string serialization on the output hot path.
+   - `WebGL2GridRenderer` (falling back to `CanvasGridRenderer`) applies each frame directly onto a `<canvas>`, so the DOM never grows one node per terminal cell.
 
 3. **Input Handling & Clipboard**:
-   - Keyboard events inside xterm.js pass through custom keybinding interceptors (`matchesKeyCombo`).
+   - Keyboard/composition events on the canvas' hidden textarea input sink are encoded (`keyEncoding.ts`) and pass through custom keybinding interceptors (`matchesKeyCombo`).
    - Shortcut actions (Copy, Paste, New Tab, Close Tab, Find) are captured.
    - **Paste**: Directly fetches text via the native `tauri-plugin-clipboard-manager` to bypass browser sandbox limitations.
-   - **Select All**: Grep regex matches prompt terminators (`$ `, `# `, `% `, `> `) to select only the active user command input.
    - Standard user input is forwarded back to Rust PTY stdin via `write_terminal` IPC.
 
 4. **Window Management & Frameless Chrome**:
@@ -113,7 +119,6 @@ sequenceDiagram
 
 ### 3. Custom Visual Effects (`src/styles/terminal.css`)
 - **Glowing Red Cursor**: Animated glowing bar/block cursor with `filter: drop-shadow(0 0 5px rgba(255, 48, 48, 0.85))` and pulse animations.
-- **Thin Glow Scrollbars**: Custom 5px thin WebKit scrollbars styled with translucent red thumbs on hover (`rgba(255, 48, 48, 0.45)`).
 - **Matrix Background Engine**: Canvas-based reactive dot grid rendering custom matrix effects (Matrix rain, subtle grid, dynamic mouse glow).
 
 ---
@@ -128,19 +133,19 @@ glyph/
 │   ├── components/
 │   │   ├── settings/            # Settings modal & keybindings remap UI
 │   │   ├── tabs/                # Tab bar & tab item component
-│   │   ├── terminal/            # TerminalView, xterm host wrapper, Matrix background
+│   │   ├── terminal/            # GlyphEngineTerminalView, canvas host wrapper, Matrix background
 │   │   └── window/              # Custom frameless TitleBar & WindowResizeHandles
 │   ├── hooks/                   # Custom hooks for PTY session, shortcuts, settings
 │   ├── lib/
-│   │   └── terminal/            # xterm setup, Tauri event listeners, types
+│   │   └── terminal/            # Grid renderers, key/mouse encoding, Tauri event listeners, types
 │   └── styles/
 │       ├── nothing.css          # Design tokens, global UI styles, controls
-│       └── terminal.css         # xterm theme overrides, glowing cursors, scrollbar
+│       └── terminal.css         # Terminal pane chrome, glowing cursors, scrollbar
 ├── src-tauri/                   # Rust Tauri Desktop Backend
 │   ├── capabilities/            # Tauri security permissions (clipboard, windowing)
 │   ├── src/
 │   │   ├── commands/            # Tauri IPC command definitions
-│   │   ├── terminal/            # PTY spawner, session manager, OSC 133 parser
+│   │   ├── terminal/            # PTY spawner, session manager, OSC 133 parser, GridEngine (engine/)
 │   │   ├── lib.rs               # App entrypoint & plugin registration
 │   │   └── main.rs              # Binary main executable
 │   └── tauri.conf.json          # Tauri app manifest & window configuration

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 
 import "../styles/workspace.css";
 import { Settings } from "../components/settings/Settings";
@@ -14,15 +15,21 @@ import { SaveCurrentWorkspaceModal } from "../components/workspace/SaveCurrentWo
 import { WorkspaceManagerModal } from "../components/workspace/WorkspaceManagerModal";
 import { useKeyboardShortcuts } from "../hooks/useKeyboardShortcuts";
 import { useTerminalBlocks } from "../hooks/useTerminalBlocks";
+import { useSessionPersistence } from "../hooks/useSessionPersistence";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { useSettingsAutoDismiss } from "../hooks/useSettingsAutoDismiss";
 import { useTerminalTheme } from "../hooks/useTerminalTheme";
+import { useCursorStyle } from "../hooks/useCursorStyle";
 import { useIsWindowMaximized } from "../hooks/useIsWindowMaximized";
 import { getTheme } from "../lib/terminal/themes";
-import { useKeybindings } from "../hooks/useKeybindings";
+import { ACTION_LABELS, formatKeyCombo, useKeybindings } from "../hooks/useKeybindings";
+import { CommandPalette, type PaletteCommand } from "../components/palette/CommandPalette";
+import { getAllThemes } from "../lib/terminal/themes";
 import { useWorkspaces } from "../hooks/useWorkspaces";
 import { isTauriRuntime } from "../lib/terminal/events";
-import { getTerminalCwd } from "../hooks/useTerminalSession";
+import { getTerminalCwd, writeTerminalData } from "../hooks/useTerminalSession";
+import { useUpdateChecker } from "../hooks/useUpdateChecker";
+import { buildUpdateCommand } from "../lib/update/updateCommand";
 import { workspaceLayoutToSplitNode } from "../lib/workspace/treeConverter";
 import type { Workspace } from "../lib/workspace/types";
 import {
@@ -35,6 +42,8 @@ import {
   updatePaneInTree,
   updateSplitRatioInTree,
 } from "../lib/terminal/splitTree";
+import { createTab } from "../lib/terminal/createTab";
+import type { InitialSession } from "../lib/session/resolveInitialSession";
 import type {
   SplitDirection,
   TerminalPaneModel,
@@ -44,31 +53,27 @@ import type {
   TerminalTabModel,
 } from "../lib/terminal/types";
 
-function createTab(index: number, cwd?: string | null): TerminalTabModel {
-  const rootNode = createPaneNode(cwd);
-  const initialPane = (rootNode as { pane: TerminalPaneModel }).pane;
-  return {
-    clientId: createId(),
-    title: `Terminal ${index}`,
-    rootNode,
-    activePaneId: initialPane.paneId,
-  };
-}
-
 function formatTabTitle(index: number): string {
   return `Terminal ${index}`;
 }
 
-export function App() {
-  const nextTabIndex = useRef(2);
-  const [tabs, setTabs] = useState<TerminalTabModel[]>(() => [createTab(1)]);
-  const [activeTabId, setActiveTabId] = useState(() => tabs[0].clientId);
+export type AppProps = {
+  initialSession: InitialSession;
+};
+
+export function App({ initialSession }: AppProps) {
+  const nextTabIndex = useRef(initialSession.nextTabIndex);
+  const [tabs, setTabs] = useState<TerminalTabModel[]>(initialSession.tabs);
+  const [activeTabId, setActiveTabId] = useState(initialSession.activeTabId);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   useSettingsAutoDismiss(settingsOpen, () => setSettingsOpen(false));
   const { blocksByTab, clearBlocks, ingestSemanticEvent } = useTerminalBlocks();
   const { settings, updateSettings } = useTerminalSettings();
-  const xtermTheme = useTerminalTheme(settings.themeId);
+  useSessionPersistence(tabs, activeTabId, settings.restoreTabsOnRestart);
+  useTerminalTheme(settings.themeId);
+  useCursorStyle(settings.cursorStyle);
   const { keybindings, updateKeybinding, resetKeybindings } = useKeybindings();
   const { workspaces, saveWorkspace, deleteWorkspace } = useWorkspaces();
 
@@ -98,10 +103,41 @@ export function App() {
     [activeTabId, tabs],
   );
 
+  const {
+    update: availableUpdate,
+    checking: checkingForUpdate,
+    currentVersion,
+    checkNow: recheckForUpdate,
+    dismiss: dismissUpdate,
+  } = useUpdateChecker();
+
+  // Drops the update command into the active pane's shell without running
+  // it — Ctrl+U first clears whatever the user was mid-typing so the
+  // command lands on a clean line instead of getting appended to it. The
+  // user still has to press Enter themselves; this only ever stages text.
+  const handleApplyUpdate = useCallback(() => {
+    if (!availableUpdate) return;
+    const activePane = findPaneNode(activeTab.rootNode, activeTab.activePaneId);
+    if (!activePane?.sessionId) return;
+    void writeTerminalData(activePane.sessionId, "\x15" + buildUpdateCommand(availableUpdate));
+  }, [availableUpdate, activeTab]);
+
   const tabsRef = useRef(tabs);
   useEffect(() => {
     tabsRef.current = tabs;
   }, [tabs]);
+
+  // Requested once, up front, rather than lazily the first time a command
+  // finishes in a background tab — asking for OS notification permission
+  // in the middle of a background event would be a confusing moment for
+  // the permission prompt to show up. A "no" here just means background
+  // command-finished notifications stay silent; nothing else depends on it.
+  useEffect(() => {
+    if (!isTauriRuntime()) return;
+    void isPermissionGranted().then((granted) => {
+      if (!granted) void requestPermission();
+    });
+  }, []);
 
   const isWindowMaximized = useIsWindowMaximized();
 
@@ -433,7 +469,95 @@ export function App() {
       setSaveCurrentWorkspaceOpen(true);
       setSettingsOpen(false);
     },
+    onCommandPalette: () => setPaletteOpen((open) => !open),
   });
+
+  // Reuses the exact same handlers `useKeyboardShortcuts` above dispatches
+  // to, so the palette can never drift out of sync with what its keyboard
+  // shortcut actually does. Pane-scoped actions (copy/paste/select-all/
+  // close-pane) aren't listed here — those are handled inside whichever
+  // `GlyphEngineTerminalView` currently has focus, not at this app level,
+  // so there's no single handler here to point a palette entry at without
+  // deeper plumbing than this pass covers.
+  const paletteCommands = useMemo<PaletteCommand[]>(
+    () => [
+      { id: "new_tab", label: ACTION_LABELS.new_tab.label, shortcut: formatKeyCombo(keybindings.new_tab), run: addTerminal },
+      { id: "new_window", label: ACTION_LABELS.new_window.label, shortcut: formatKeyCombo(keybindings.new_window), run: openNewWindow },
+      {
+        id: "close_tab",
+        label: ACTION_LABELS.close_tab.label,
+        shortcut: formatKeyCombo(keybindings.close_tab),
+        run: () => {
+          const activeTab = tabsRef.current.find((t) => t.clientId === activeTabId);
+          if (activeTab) closePane(activeTab.clientId, activeTab.activePaneId);
+        },
+      },
+      {
+        id: "split_vertical",
+        label: ACTION_LABELS.split_vertical.label,
+        shortcut: formatKeyCombo(keybindings.split_vertical),
+        run: () => void splitActiveTerminal("vertical"),
+      },
+      {
+        id: "split_horizontal",
+        label: ACTION_LABELS.split_horizontal.label,
+        shortcut: formatKeyCombo(keybindings.split_horizontal),
+        run: () => void splitActiveTerminal("horizontal"),
+      },
+      { id: "next_tab", label: ACTION_LABELS.next_tab.label, shortcut: formatKeyCombo(keybindings.next_tab), run: handleNextTab },
+      { id: "prev_tab", label: ACTION_LABELS.prev_tab.label, shortcut: formatKeyCombo(keybindings.prev_tab), run: handlePrevTab },
+      {
+        id: "search",
+        label: ACTION_LABELS.search.label,
+        shortcut: formatKeyCombo(keybindings.search),
+        run: () => {
+          setSearchOpen(true);
+          setSettingsOpen(false);
+        },
+      },
+      {
+        id: "toggle_settings",
+        label: ACTION_LABELS.toggle_settings.label,
+        shortcut: formatKeyCombo(keybindings.toggle_settings),
+        run: () => setSettingsOpen((open) => !open),
+      },
+      {
+        id: "open_workspace",
+        label: ACTION_LABELS.open_workspace.label,
+        shortcut: formatKeyCombo(keybindings.open_workspace),
+        run: () => {
+          setManageWorkspacesOpen(true);
+          setSettingsOpen(false);
+        },
+      },
+      {
+        id: "save_workspace",
+        label: ACTION_LABELS.save_workspace.label,
+        shortcut: formatKeyCombo(keybindings.save_workspace),
+        run: () => {
+          setSaveCurrentWorkspaceOpen(true);
+          setSettingsOpen(false);
+        },
+      },
+      ...getAllThemes().map((theme) => ({
+        id: `theme:${theme.id}`,
+        label: `Theme: ${theme.name}`,
+        group: "themes",
+        run: () => updateSettings({ themeId: theme.id }),
+      })),
+    ],
+    [
+      keybindings,
+      activeTabId,
+      addTerminal,
+      openNewWindow,
+      closePane,
+      splitActiveTerminal,
+      handleNextTab,
+      handlePrevTab,
+      updateSettings,
+    ],
+  );
 
   const currentExpandedTab = tabs.find((t) => t.clientId === expandedPane?.tabId);
   const expandedPaneModel =
@@ -453,6 +577,9 @@ export function App() {
         dotColor={settings.dotColor}
       />
       <TitleBar
+        availableUpdate={availableUpdate}
+        onApplyUpdate={handleApplyUpdate}
+        onDismissUpdate={dismissUpdate}
         onNewWindow={openNewWindow}
         onSearch={() => {
           setSearchOpen((prev) => {
@@ -536,7 +663,6 @@ export function App() {
                   isWindowMaximized={isWindowMaximized}
                   searchOpen={searchOpen && isTabActive}
                   settings={settings}
-                  xtermTheme={xtermTheme}
                   tabId={tab.clientId}
                   onActivatePane={(paneId) => handleActivatePane(tab.clientId, paneId)}
                   onClosePane={(paneId) => closePane(tab.clientId, paneId)}
@@ -637,6 +763,11 @@ export function App() {
           onUpdateSettings={updateSettings}
           onUpdateKeybinding={updateKeybinding}
           onResetKeybindings={resetKeybindings}
+          currentVersion={currentVersion}
+          availableUpdate={availableUpdate}
+          checkingForUpdate={checkingForUpdate}
+          onCheckForUpdate={recheckForUpdate}
+          onApplyUpdate={handleApplyUpdate}
         />
         <CreateWorkspaceModal
           isOpen={createWorkspaceOpen}
@@ -657,6 +788,7 @@ export function App() {
           onSaveWorkspace={saveWorkspace}
           onDeleteWorkspace={deleteWorkspace}
         />
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} />
       </main>
     </div>
   );

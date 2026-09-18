@@ -21,11 +21,16 @@ tauri-build = { version = "2.6.3", features = [] }
 portable-pty = "0.9.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri = { version = "2.11.5", features = [] }
+tauri = { version = "2.11.5", features = ["tray-icon"] }
 tauri-plugin-clipboard-manager = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-global-shortcut = "2"
 thiserror = "2"
 tracing = "0.1"
 uuid = { version = "1", features = ["v4", "serde"] }
 open = "5"
 sysinfo = "0.36.1"
+# Rust-owned VT parser + grid state for the WebGL2/Canvas2D renderer
+# path (see src/terminal/engine), the terminal's sole rendering pipeline.
+alacritty_terminal = "0.26.0"
 
