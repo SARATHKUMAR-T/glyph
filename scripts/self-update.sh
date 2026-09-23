@@ -16,16 +16,16 @@ REPO="SARATHKUMAR-T/glyph"
 TAG="${1:?usage: self-update.sh <release-tag>}"
 VERSION="${TAG#v}"
 
-# `curl | bash` hands this script's stdin to bash as the script body, so by
-# default nothing here can read from the terminal — a `sudo` password
-# prompt (needed for the .deb path below) would otherwise fail silently.
-# Reattaching stdin to the controlling TTY fixes that, and is safe here
-# because this only ever runs pasted into a real interactive terminal.
-if [ -t 1 ] && [ -r /dev/tty ]; then
-  exec < /dev/tty
-fi
+# `curl | bash` feeds this script to bash through stdin, and bash keeps
+# reading the *rest of the script* from stdin as it goes. So stdin must
+# never be redirected script-wide (e.g. `exec < /dev/tty`): bash would then
+# wait for the remaining script body to be typed at the keyboard, and the
+# update would silently hang. Commands that need the terminal (the .deb
+# path's `sudo dpkg -i`) redirect `< /dev/tty` individually instead.
 
-log() { printf '\033[1;36m[glyph-update]\033[0m %s\n' "$1"; }
+# Logs go to stderr: `download_and_verify` is called inside `$(...)`, and
+# anything it prints to stdout would be captured as part of the file path.
+log() { printf '\033[1;36m[glyph-update]\033[0m %s\n' "$1" >&2; }
 fail() { printf '\033[1;31m[glyph-update]\033[0m %s\n' "$1" >&2; exit 1; }
 
 case "$(uname -s)" in
@@ -75,13 +75,18 @@ if [ -n "${APPIMAGE:-}" ] && [ -w "$(dirname "${APPIMAGE}")" ]; then
   exit 0
 fi
 
-# .deb-based installs (Debian/Ubuntu) go through dpkg, which needs root —
-# this is the path `exec < /dev/tty` above exists for.
+# .deb-based installs (Debian/Ubuntu) go through dpkg, which needs root.
+# `< /dev/tty` gives sudo's password prompt (and any dpkg question) the
+# keyboard without touching the stdin bash is reading this script from.
 if command -v dpkg >/dev/null 2>&1 && dpkg -s glyph >/dev/null 2>&1; then
   ASSET="glyph_${VERSION}_${ARCH}.deb"
   NEW_FILE="$(download_and_verify "$ASSET")"
   log "Installing via dpkg (you may be prompted for your password)…"
-  sudo dpkg -i "$NEW_FILE"
+  if [ -r /dev/tty ] && : 2>/dev/null < /dev/tty; then
+    sudo dpkg -i "$NEW_FILE" < /dev/tty
+  else
+    sudo dpkg -i "$NEW_FILE"
+  fi
   log "Updated to v${VERSION}. Open Settings → Updates → Restart Now to pick it up."
   log "(Closing the window alone won't do it — Glyph keeps running in the tray until told to quit.)"
   exit 0

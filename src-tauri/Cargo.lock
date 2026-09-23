@@ -1516,7 +1516,7 @@ dependencies = [
 
 [[package]]
 name = "glyph-terminal"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "alacritty_terminal",
  "open",
