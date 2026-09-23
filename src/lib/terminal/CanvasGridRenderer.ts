@@ -65,6 +65,7 @@ export class CanvasGridRenderer implements GridRenderer {
   };
   private blinkTimer: ReturnType<typeof setInterval> | null = null;
   private blinkEnabled = false;
+  private focused = true;
 
   private displayOffset = 0;
   private historySize = 0;
@@ -187,6 +188,12 @@ export class CanvasGridRenderer implements GridRenderer {
     }
   }
 
+  setFocused(focused: boolean) {
+    if (this.focused === focused) return;
+    this.focused = focused;
+    this.paintRow(this.cursor.line);
+  }
+
   dispose() {
     if (this.blinkTimer) clearInterval(this.blinkTimer);
     this.blinkTimer = null;
@@ -268,7 +275,7 @@ export class CanvasGridRenderer implements GridRenderer {
 
     // Background: batch runs of identical resolved bg color.
     let runStart = 0;
-    let runColor = this.resolvedBg(this.grid[base]);
+    let runColor: string | null = this.resolvedBg(this.grid[base]);
     for (let col = 1; col <= cols; col++) {
       const color = col < cols ? this.resolvedBg(this.grid[base + col]) : null;
       if (color !== runColor) {
@@ -385,7 +392,7 @@ export class CanvasGridRenderer implements GridRenderer {
     }
   }
 
-  private resolvedBg(cell: DecodedCell): string | null {
+  private resolvedBg(cell: DecodedCell): string {
     const inverse = (cell.flags & CellFlags.INVERSE) !== 0;
     const packed = inverse ? cell.fg : cell.bg;
     return packedColorToCss(packed);
@@ -493,6 +500,32 @@ export class CanvasGridRenderer implements GridRenderer {
     const bg = this.themeColor("--glyph-bg", "#000000");
 
     ctx.save();
+
+    if (!this.focused) {
+      // Unfocused pane (e.g. the non-active side of a split): a hollow
+      // outline instead of the focused pane's solid fill, so only one
+      // pane ever reads as "active" cursor at a glance.
+      ctx.strokeStyle = accent;
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 1;
+      switch (this.cursor.shape) {
+        case WireCursorShape.Block:
+          ctx.strokeRect(x + 0.5, y + 0.5, cellWidth - 1, cellHeight - 1);
+          break;
+        case WireCursorShape.Bar:
+          ctx.strokeRect(x + 0.5, y + 0.5, 3, cellHeight - 1);
+          break;
+        case WireCursorShape.Underline:
+          ctx.strokeRect(x + 0.5, y + cellHeight - 4, cellWidth - 1, 3);
+          break;
+        case WireCursorShape.Hidden:
+        default:
+          break;
+      }
+      ctx.restore();
+      return;
+    }
+
     ctx.fillStyle = accent;
 
     switch (this.cursor.shape) {

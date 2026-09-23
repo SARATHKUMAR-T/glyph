@@ -1,5 +1,8 @@
+import { useState } from "react";
+
 import type { TerminalTabModel } from "../../lib/terminal/types";
 import { getAllPanesInTree } from "../../lib/terminal/splitTree";
+import { reorderTabs } from "../../lib/terminal/reorderTabs";
 import { TerminalTab } from "./TerminalTab";
 
 type TerminalTabsProps = {
@@ -8,6 +11,7 @@ type TerminalTabsProps = {
   onActivate: (clientId: string) => void;
   onClose: (clientId: string) => void;
   onNewTerminal: () => void;
+  onReorder: (tabs: TerminalTabModel[]) => void;
 };
 
 export function TerminalTabs({
@@ -15,8 +19,17 @@ export function TerminalTabs({
   onActivate,
   onClose,
   onNewTerminal,
+  onReorder,
   tabs,
 }: TerminalTabsProps) {
+  const [draggedId, setDraggedId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; position: "before" | "after" } | null>(null);
+
+  const resetDrag = () => {
+    setDraggedId(null);
+    setDropTarget(null);
+  };
+
   return (
     <aside className="terminal-tabs" role="tablist" aria-label="Terminal tabs sidebar">
       <div className="tabs-header">
@@ -36,8 +49,24 @@ export function TerminalTabs({
               tab={tab}
               status={status}
               paneCount={panes.length}
+              isDragging={tab.clientId === draggedId}
+              dropIndicator={dropTarget?.id === tab.clientId ? dropTarget.position : null}
               onActivate={onActivate}
               onClose={onClose}
+              onDragStart={setDraggedId}
+              onDragOver={(clientId, position) => {
+                if (!clientId || !position || clientId === draggedId) {
+                  setDropTarget(null);
+                  return;
+                }
+                setDropTarget({ id: clientId, position });
+              }}
+              onDrop={() => {
+                if (draggedId && dropTarget) {
+                  onReorder(reorderTabs(tabs, draggedId, dropTarget.id, dropTarget.position));
+                }
+              }}
+              onDragEnd={resetDrag}
             />
           );
         })}

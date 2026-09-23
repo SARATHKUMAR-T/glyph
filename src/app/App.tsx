@@ -43,6 +43,7 @@ import {
   updateSplitRatioInTree,
 } from "../lib/terminal/splitTree";
 import { createTab } from "../lib/terminal/createTab";
+import { AUTO_TITLE_PATTERN, renumberAutoTitledTabs } from "../lib/terminal/renumberTabs";
 import type { InitialSession } from "../lib/session/resolveInitialSession";
 import type {
   SplitDirection,
@@ -233,6 +234,20 @@ export function App({ initialSession }: AppProps) {
     }
   }, []);
 
+  // After any tab closes, the surviving auto-titled tabs ("Terminal N")
+  // are renumbered to a contiguous 1..N run in their current order —
+  // closing tab 1 out of "Terminal 1"/"Terminal 2" leaves just "Terminal
+  // 2" renamed down to "Terminal 1", rather than a gap. Custom titles
+  // (restored workspaces, shell-reported names) are left untouched.
+  // `nextTabIndex` is reset alongside so the next "New Terminal" continues
+  // right after the renumbered run instead of resuming from a stale count.
+  const renumberAndReindex = useCallback((nextTabs: TerminalTabModel[]): TerminalTabModel[] => {
+    const renumbered = renumberAutoTitledTabs(nextTabs);
+    const autoCount = renumbered.filter((t) => AUTO_TITLE_PATTERN.test(t.title)).length;
+    nextTabIndex.current = autoCount + 1;
+    return renumbered;
+  }, []);
+
   const closeTab = useCallback(
     (clientId: string) => {
       setTabs((currentTabs) => {
@@ -241,7 +256,7 @@ export function App({ initialSession }: AppProps) {
         }
 
         const tabIndex = currentTabs.findIndex((tab) => tab.clientId === clientId);
-        const nextTabs = currentTabs.filter((tab) => tab.clientId !== clientId);
+        const nextTabs = renumberAndReindex(currentTabs.filter((tab) => tab.clientId !== clientId));
 
         const targetTab = currentTabs.find((t) => t.clientId === clientId);
         if (targetTab) {
@@ -259,7 +274,7 @@ export function App({ initialSession }: AppProps) {
         return nextTabs;
       });
     },
-    [activeTabId, clearBlocks],
+    [activeTabId, clearBlocks, renumberAndReindex],
   );
 
   const closePane = useCallback(
@@ -274,7 +289,7 @@ export function App({ initialSession }: AppProps) {
             return currentTabs;
           }
           const tabIndex = currentTabs.findIndex((t) => t.clientId === clientId);
-          const nextTabs = currentTabs.filter((t) => t.clientId !== clientId);
+          const nextTabs = renumberAndReindex(currentTabs.filter((t) => t.clientId !== clientId));
           clearBlocks(paneId);
 
           if (activeTabId === clientId) {
@@ -310,12 +325,14 @@ export function App({ initialSession }: AppProps) {
         );
       });
     },
-    [activeTabId, clearBlocks],
+    [activeTabId, clearBlocks, renumberAndReindex],
   );
 
   const handleActivatePane = useCallback((clientId: string, paneId: string) => {
     setTabs((current) =>
-      current.map((t) => (t.clientId === clientId ? { ...t, activePaneId: paneId } : t)),
+      current.map((t) =>
+        t.clientId === clientId && t.activePaneId !== paneId ? { ...t, activePaneId: paneId } : t,
+      ),
     );
   }, []);
 
@@ -625,6 +642,7 @@ export function App({ initialSession }: AppProps) {
             setSettingsOpen(false);
             setExpandedPane(null);
           }}
+          onReorder={setTabs}
         />
         <section className="terminal-stage" aria-label="Terminal sessions">
           {tabs.map((tab) => {

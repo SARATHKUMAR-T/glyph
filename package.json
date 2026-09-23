@@ -8,8 +8,8 @@
     "dev": "vite --host 127.0.0.1 --port 1420",
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 1421",
-    "tauri": "tauri",
-    "tauri:dev": "tauri dev",
+    "tauri": "env -u GTK_PATH -u GTK_EXE_PREFIX -u GDK_PIXBUF_MODULE_FILE -u GDK_PIXBUF_MODULEDIR -u GIO_MODULE_DIR -u GSETTINGS_SCHEMA_DIR -u LOCPATH -u SNAP_LIBRARY_PATH -u GTK_IM_MODULE_FILE tauri",
+    "tauri:dev": "npm run tauri -- dev",
     "typecheck": "tsc --noEmit",
     "gen:corpus": "node scripts/gen-corpus.mjs",
     "test:grid-diff": "cargo test --manifest-path src-tauri/Cargo.toml --test grid_diff && node scripts/grid-diff.mjs"
