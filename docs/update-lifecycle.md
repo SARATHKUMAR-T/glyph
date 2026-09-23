@@ -85,13 +85,15 @@ matching `v*.*.*`.
 
 Steps, in order:
 
-1. **`verify-version` job** — reads `src-tauri/tauri.conf.json` and
-   `package.json`, and fails the whole workflow if either's `"version"`
-   field doesn't match the pushed tag. This exists because the running
-   app's idea of "my version" comes from `tauri.conf.json` at build time
-   (via `getVersion()`), not from the git tag — if those ever drift, the
-   update-checker compares the wrong numbers and either nags forever or
-   never fires. **Bumping the version in those files is therefore always
+1. **`verify-version` job** — reads `src-tauri/tauri.conf.json`,
+   `package.json`, and `src-tauri/Cargo.toml`, and fails the whole workflow
+   if any of their `version` fields don't match the pushed tag. The
+   running app's idea of "my version" (`getVersion()`) comes from
+   `tauri.conf.json`'s `version` at build time, which takes precedence
+   over Cargo.toml's — but Cargo.toml's `CARGO_PKG_VERSION` still leaks
+   out elsewhere (e.g. `TERM_PROGRAM_VERSION`), so letting it drift
+   produces a binary that reports two different versions depending on who
+   asks. **Bumping the version in all three files is therefore always
    the first step of cutting a release, before tagging.**
 2. **`build` job** (matrix: `amd64` on `ubuntu-24.04`, `arm64` on
    `ubuntu-24.04-arm`) — installs the same Tauri Linux deps as `ci.yml`,
@@ -206,10 +208,23 @@ The script itself (Linux only, for now):
    §7 for why it isn't equivalent).
 3. AppImage: overwrites the running file in place with `mv` (frictionless,
    no root). `.deb`: runs `sudo dpkg -i` on the downloaded package.
-4. Prints a "restart Glyph" message — the script never kills or relaunches
-   the running process, since a terminal app force-closing itself mid-way
-   through the user's session would be a worse experience than asking them
-   to restart when convenient.
+4. Prints a message pointing at **Settings → Updates → Restart Now**
+   (`restartApp()` in `src/lib/update/restartApp.ts`, backed by
+   `tauri-plugin-process`'s `relaunch()`) — the script never kills or
+   relaunches the running process itself, since a terminal app
+   force-closing itself mid-way through the user's session would be a
+   worse experience than asking them to restart when convenient.
+
+   This is a real button, not just advice, because closing the window is
+   *not* enough here: Glyph has a tray icon (`src-tauri/src/tray.rs`), and
+   closing the main window only hides it — the process, with the
+   pre-update binary already loaded into memory, keeps running in the
+   background. Reopening the window from the tray shows the *same* old
+   process, so `getVersion()` keeps reporting the old version and the
+   badge keeps nagging even though the file on disk has already been
+   replaced. Only an actual process relaunch (full quit + re-exec) picks
+   up the new binary — hence a dedicated Restart action instead of relying
+   on window close.
 
 ---
 
@@ -262,7 +277,9 @@ later means:
 | Update command builder | `src/lib/update/updateCommand.ts` |
 | Polling + dismissal state | `src/hooks/useUpdateChecker.ts` |
 | Title-bar badge | `src/components/window/UpdateBadge.tsx`, `TitleBar.tsx` |
+| Restart action | `src/lib/update/restartApp.ts` |
 | Settings panel | `src/components/settings/Settings.tsx` |
 | Wiring (active pane → PTY write) | `src/app/App.tsx` (`handleApplyUpdate`) |
 | Install script | `scripts/self-update.sh` |
 | Release pipeline | `.github/workflows/release.yml` |
+| Tray / close-to-tray behavior | `src-tauri/src/tray.rs` |

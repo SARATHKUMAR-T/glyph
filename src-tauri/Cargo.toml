@@ -1,6 +1,6 @@
 [package]
-name = "nothing-terminal"
-version = "0.2.0"
+name = "glyph-terminal"
+version = "0.2.3"
 description = "A Nothing-inspired Linux terminal emulator."
 authors = ["Aximsoft"]
 edition = "2021"
@@ -25,6 +25,7 @@ tauri = { version = "2.11.5", features = ["tray-icon"] }
 tauri-plugin-clipboard-manager = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-global-shortcut = "2"
+tauri-plugin-process = "2"
 thiserror = "2"
 tracing = "0.1"
 uuid = { version = "1", features = ["v4", "serde"] }

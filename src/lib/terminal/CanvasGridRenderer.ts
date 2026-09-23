@@ -12,6 +12,7 @@ import {
   type MouseMode,
 } from "./engineProtocol";
 import type { GridRenderer, SelectionRange } from "./GridRenderer";
+import { parseCssColorToFloat, pickReadableColor, rgbaToCss } from "./contrast";
 
 interface RendererOptions {
   fontFamily: string;
@@ -64,6 +65,7 @@ export class CanvasGridRenderer implements GridRenderer {
   };
   private blinkTimer: ReturnType<typeof setInterval> | null = null;
   private blinkEnabled = false;
+  private focused = true;
 
   private displayOffset = 0;
   private historySize = 0;
@@ -186,6 +188,12 @@ export class CanvasGridRenderer implements GridRenderer {
     }
   }
 
+  setFocused(focused: boolean) {
+    if (this.focused === focused) return;
+    this.focused = focused;
+    this.paintRow(this.cursor.line);
+  }
+
   dispose() {
     if (this.blinkTimer) clearInterval(this.blinkTimer);
     this.blinkTimer = null;
@@ -267,7 +275,7 @@ export class CanvasGridRenderer implements GridRenderer {
 
     // Background: batch runs of identical resolved bg color.
     let runStart = 0;
-    let runColor = this.resolvedBg(this.grid[base]);
+    let runColor: string | null = this.resolvedBg(this.grid[base]);
     for (let col = 1; col <= cols; col++) {
       const color = col < cols ? this.resolvedBg(this.grid[base + col]) : null;
       if (color !== runColor) {
@@ -304,7 +312,7 @@ export class CanvasGridRenderer implements GridRenderer {
         continue;
       }
       const isWide = (cell.flags & CellFlags.WIDE_CHAR) !== 0;
-      const styleKey = this.styleKey(cell);
+      const styleKey = this.styleKey(cell, row, col);
 
       if (isWide) {
         this.drawRun(base, col, col + 1, styleKey);
@@ -316,7 +324,7 @@ export class CanvasGridRenderer implements GridRenderer {
       while (
         end < cols &&
         !(this.grid[base + end].flags & (CellFlags.WIDE_CHAR | CellFlags.WIDE_CHAR_SPACER)) &&
-        this.styleKey(this.grid[base + end]) === styleKey
+        this.styleKey(this.grid[base + end], row, end) === styleKey
       ) {
         end++;
       }
@@ -384,7 +392,7 @@ export class CanvasGridRenderer implements GridRenderer {
     }
   }
 
-  private resolvedBg(cell: DecodedCell): string | null {
+  private resolvedBg(cell: DecodedCell): string {
     const inverse = (cell.flags & CellFlags.INVERSE) !== 0;
     const packed = inverse ? cell.fg : cell.bg;
     return packedColorToCss(packed);
@@ -396,8 +404,28 @@ export class CanvasGridRenderer implements GridRenderer {
     return packedColorToCss(packed);
   }
 
-  private styleKey(cell: DecodedCell): string {
-    return `${this.resolvedFg(cell)}|${cell.flags & (CellFlags.BOLD | CellFlags.ITALIC | CellFlags.DIM | CellFlags.INVERSE | CellFlags.HIDDEN)}`;
+  private styleKey(cell: DecodedCell, row: number, col: number): string {
+    return `${this.effectiveFg(cell, row, col)}|${cell.flags & (CellFlags.BOLD | CellFlags.ITALIC | CellFlags.DIM | CellFlags.INVERSE | CellFlags.HIDDEN)}`;
+  }
+
+  /** `resolvedFg`, except inside a plain selection it swaps in plain black
+   * or white when the cell's own color wouldn't have enough contrast
+   * against the actual composited selection highlight — see contrast.ts. */
+  private effectiveFg(cell: DecodedCell, row: number, col: number): string {
+    const fgCss = this.resolvedFg(cell);
+    const selCols = this.selectionColsForRow(row);
+    const inPlainSelection = selCols && this.selection?.kind !== "search" && col >= selCols[0] && col < selCols[1];
+    if (!inPlainSelection) return fgCss;
+
+    const cellBgCss = this.resolvedBg(cell);
+    const effectiveCellBgCss = isTransparent(cellBgCss) ? this.themeColor("--glyph-bg", "#000000") : cellBgCss;
+    const selectionBgCss = this.themeColor("--glyph-selection-bg", "rgba(255, 48, 48, 0.35)");
+
+    const fg = parseCssColorToFloat(fgCss);
+    const cellBg = parseCssColorToFloat(effectiveCellBgCss);
+    const selectionBg = parseCssColorToFloat(selectionBgCss);
+    const picked = pickReadableColor(fg, [cellBg[0], cellBg[1], cellBg[2]], selectionBg);
+    return picked === fg ? fgCss : rgbaToCss(picked);
   }
 
   private drawRun(base: number, startCol: number, endCol: number, _styleKey: string) {
@@ -415,16 +443,17 @@ export class CanvasGridRenderer implements GridRenderer {
     const bold = (cell.flags & CellFlags.BOLD) !== 0;
     const italic = (cell.flags & CellFlags.ITALIC) !== 0;
     const dim = (cell.flags & CellFlags.DIM) !== 0;
+    const fillColor = this.effectiveFg(cell, row, startCol);
 
     ctx.font = `${italic ? "italic " : ""}${bold ? "700" : "400"} ${this.opts.fontSize}px ${this.opts.fontFamily}`;
     ctx.textBaseline = "alphabetic";
     ctx.globalAlpha = dim ? 0.65 : 1;
-    ctx.fillStyle = this.resolvedFg(cell);
+    ctx.fillStyle = fillColor;
     ctx.fillText(text, x, y + baseline);
     ctx.globalAlpha = 1;
 
     if (cell.flags & ALL_UNDERLINE_FLAGS) {
-      ctx.strokeStyle = this.resolvedFg(cell);
+      ctx.strokeStyle = fillColor;
       ctx.lineWidth = 1;
       const uy = y + baseline + 2.5;
       ctx.beginPath();
@@ -448,7 +477,7 @@ export class CanvasGridRenderer implements GridRenderer {
     }
 
     if (cell.flags & CellFlags.STRIKETHROUGH) {
-      ctx.strokeStyle = this.resolvedFg(cell);
+      ctx.strokeStyle = fillColor;
       ctx.lineWidth = 1;
       const sy = y + baseline - cellHeight * 0.28;
       ctx.beginPath();
@@ -471,6 +500,32 @@ export class CanvasGridRenderer implements GridRenderer {
     const bg = this.themeColor("--glyph-bg", "#000000");
 
     ctx.save();
+
+    if (!this.focused) {
+      // Unfocused pane (e.g. the non-active side of a split): a hollow
+      // outline instead of the focused pane's solid fill, so only one
+      // pane ever reads as "active" cursor at a glance.
+      ctx.strokeStyle = accent;
+      ctx.globalAlpha = 0.55;
+      ctx.lineWidth = 1;
+      switch (this.cursor.shape) {
+        case WireCursorShape.Block:
+          ctx.strokeRect(x + 0.5, y + 0.5, cellWidth - 1, cellHeight - 1);
+          break;
+        case WireCursorShape.Bar:
+          ctx.strokeRect(x + 0.5, y + 0.5, 3, cellHeight - 1);
+          break;
+        case WireCursorShape.Underline:
+          ctx.strokeRect(x + 0.5, y + cellHeight - 4, cellWidth - 1, 3);
+          break;
+        case WireCursorShape.Hidden:
+        default:
+          break;
+      }
+      ctx.restore();
+      return;
+    }
+
     ctx.fillStyle = accent;
 
     switch (this.cursor.shape) {

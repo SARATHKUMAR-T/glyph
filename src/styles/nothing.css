@@ -496,6 +496,7 @@ body,
 }
 
 .terminal-tab {
+  position: relative;
   flex-shrink: 0;
   height: 32px;
   min-width: 120px;
@@ -507,12 +508,38 @@ body,
   border-radius: 6px;
   background: var(--glyph-surface-raised);
   overflow: hidden;
-  transition: all 120ms ease;
+  transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
+  cursor: grab;
+  touch-action: none;
 }
 
 .terminal-tab.is-active {
   border-color: var(--glyph-accent);
   background: var(--glyph-accent-dim);
+}
+
+.terminal-tab.is-dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.terminal-tab.drop-before::before,
+.terminal-tab.drop-after::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--glyph-accent);
+}
+
+.terminal-tab.drop-before::before {
+  left: -4px;
+}
+
+.terminal-tab.drop-after::after {
+  right: -4px;
 }
 
 .terminal-tab-main {

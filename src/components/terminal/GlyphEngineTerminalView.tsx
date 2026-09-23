@@ -213,6 +213,7 @@ export function GlyphEngineTerminalView({
   isExpanded = false,
   isWindowMaximized = false,
   keybindings,
+  onActivatePane,
   onClosePane,
   onCloseSearch,
   onCloseTerminal,
@@ -354,6 +355,7 @@ export function GlyphEngineTerminalView({
         lineHeight: LINE_HEIGHT,
       });
       renderer.setGrid(cols, rows);
+      renderer.setFocused(active && isPaneActive);
       renderer.setBlinkEnabled(active && isPaneActive && (settings?.cursorBlink ?? true));
       rendererRef.current = renderer;
 
@@ -513,6 +515,7 @@ export function GlyphEngineTerminalView({
   useEffect(() => {
     activeRef.current = active;
     isPaneActiveRef.current = isPaneActive;
+    rendererRef.current?.setFocused(active && isPaneActive);
     rendererRef.current?.setBlinkEnabled(active && isPaneActive && (settings?.cursorBlink ?? true));
   }, [active, isPaneActive, settings?.cursorBlink]);
 
@@ -1361,6 +1364,7 @@ export function GlyphEngineTerminalView({
             autoCapitalize="off"
             autoCorrect="off"
             aria-hidden="true"
+            onFocus={() => onActivatePane(pane.paneId)}
             onKeyDown={handleKeyDown}
             onInput={handleInput}
             onCompositionStart={handleCompositionStart}

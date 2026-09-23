@@ -40,6 +40,12 @@ export interface GridRenderer {
   /** Decode and apply one raw frame from the engine's IPC channel. */
   applyFrameBytes(data: ArrayBuffer | Uint8Array): void;
   setBlinkEnabled(enabled: boolean): void;
+  /** Whether this pane is the one actually focused (its tab active *and*,
+   * inside a split, it's the selected pane). An unfocused pane still shows
+   * its cursor position but as a dim hollow outline rather than the
+   * focused pane's solid block/bar/underline, so a split never reads as
+   * having two "active" cursors at once. */
+  setFocused(focused: boolean): void;
   getCellMetrics(): { cellWidth: number; cellHeight: number };
   /** Scrollback offset from the most recently applied frame (0 = live
    * bottom), for converting mouse/search coordinates to/from absolute

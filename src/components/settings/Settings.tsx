@@ -13,6 +13,7 @@ import { CustomSelect } from "../ui/CustomSelect";
 import { getAllThemes, getTheme } from "../../lib/terminal/themes";
 import type { ThemeId } from "../../lib/terminal/themes";
 import type { UpdateInfo } from "../../lib/update/types";
+import { restartApp } from "../../lib/update/restartApp";
 
 type SettingsProps = {
   open: boolean;
@@ -654,10 +655,18 @@ export function Settings({
                 </button>
               </div>
             )}
+            <div className="settings-row">
+              <span>Restart Glyph</span>
+              <button type="button" className="settings-toggle" onClick={() => void restartApp()}>
+                Restart Now
+              </button>
+            </div>
             <p className="settings-group-desc" style={{ marginTop: 4 }}>
               Glyph checks GitHub Releases for newer builds every 6 hours. Staging an
               update places its install command in the active terminal — nothing runs
-              until you press Enter.
+              until you press Enter. Once it finishes, use <strong>Restart Now</strong> above
+              to pick up the new build — closing the window alone won't do it, since Glyph
+              keeps running in the background (tray icon) until it's told to quit.
             </p>
           </div>
         )}

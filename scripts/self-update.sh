@@ -70,7 +70,8 @@ if [ -n "${APPIMAGE:-}" ] && [ -w "$(dirname "${APPIMAGE}")" ]; then
   chmod +x "$NEW_FILE"
   mv "$NEW_FILE" "$APPIMAGE"
   log "Updated in place: ${APPIMAGE}"
-  log "Restart Glyph to finish updating to v${VERSION}."
+  log "Open Settings → Updates → Restart Now to finish updating to v${VERSION}."
+  log "(Closing the window alone won't do it — Glyph keeps running in the tray until told to quit.)"
   exit 0
 fi
 
@@ -81,7 +82,8 @@ if command -v dpkg >/dev/null 2>&1 && dpkg -s glyph >/dev/null 2>&1; then
   NEW_FILE="$(download_and_verify "$ASSET")"
   log "Installing via dpkg (you may be prompted for your password)…"
   sudo dpkg -i "$NEW_FILE"
-  log "Updated to v${VERSION}. Restart Glyph to pick it up."
+  log "Updated to v${VERSION}. Open Settings → Updates → Restart Now to pick it up."
+  log "(Closing the window alone won't do it — Glyph keeps running in the tray until told to quit.)"
   exit 0
 fi
 

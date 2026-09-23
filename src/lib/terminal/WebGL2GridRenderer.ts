@@ -164,6 +164,7 @@ export class WebGL2GridRenderer implements GridRenderer {
     blinkOn: true,
   };
   private blinkTimer: ReturnType<typeof setInterval> | null = null;
+  private focused = true;
   private rafHandle = 0;
   private dirty = true;
   private disposed = false;
@@ -393,6 +394,12 @@ export class WebGL2GridRenderer implements GridRenderer {
         this.dirty = true;
       }, 530);
     }
+  }
+
+  setFocused(focused: boolean) {
+    if (this.focused === focused) return;
+    this.focused = focused;
+    this.dirty = true;
   }
 
   dispose() {
@@ -641,7 +648,7 @@ export class WebGL2GridRenderer implements GridRenderer {
     }
     if (this.cursor.visible && this.cursor.blinkOn) {
       const accent = this.themeColor("--glyph-accent", "#ff3030");
-      pushCursorQuad(deco, this.cursor, this.cellWidth, this.cellHeight, accent);
+      pushCursorQuad(deco, this.cursor, this.cellWidth, this.cellHeight, accent, this.focused);
     }
     if (deco.length > 0) {
       gl.bindBuffer(gl.ARRAY_BUFFER, this.decoInstanceVbo);
@@ -701,9 +708,40 @@ function pushCursorQuad(
   cellWidth: number,
   cellHeight: number,
   accent: [number, number, number, number],
+  focused: boolean,
 ) {
   const [r, g, b, a] = accent;
   const { col, line, shape } = cursor;
+
+  if (!focused) {
+    // Unfocused pane (e.g. the non-active side of a split): a hollow
+    // outline instead of the focused pane's solid fill, so only one pane
+    // ever reads as having an "active" cursor. WebGL has no native
+    // stroke-rect, so a Block cursor is four thin filled edge quads —
+    // the same technique the selection border above uses.
+    const dimA = a * 0.55;
+    const bx = cellWidth > 0 ? 1 / cellWidth : 0;
+    const by = cellHeight > 0 ? 1 / cellHeight : 0;
+    switch (shape) {
+      case WireCursorShape.Block:
+        out.push(col, line, bx, 1, r, g, b, dimA);
+        out.push(col + 1 - bx, line, bx, 1, r, g, b, dimA);
+        out.push(col, line, 1, by, r, g, b, dimA);
+        out.push(col, line + 1 - by, 1, by, r, g, b, dimA);
+        break;
+      case WireCursorShape.Bar:
+        out.push(col, line, 3.5 / cellWidth, 1, r, g, b, dimA);
+        break;
+      case WireCursorShape.Underline:
+        out.push(col, line + 1 - 3.5 / cellHeight, 1, 3.5 / cellHeight, r, g, b, dimA);
+        break;
+      case WireCursorShape.Hidden:
+      default:
+        break;
+    }
+    return;
+  }
+
   switch (shape) {
     case WireCursorShape.Block:
       out.push(col, line, 1, 1, r, g, b, a * 0.85);
