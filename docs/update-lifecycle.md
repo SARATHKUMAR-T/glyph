@@ -187,14 +187,18 @@ Two details matter here:
   `main`. `self-update.sh` is fetched from that tag's committed copy, so a
   later change to the script on `main` can never retroactively alter what
   an already-published version's update command runs.
-- **`self-update.sh` re-attaches its own stdin to `/dev/tty`
-  (`exec < /dev/tty`)** near the top. `curl | bash` feeds the script's
-  *source* into bash via stdin — which means, by default, nothing inside
-  the script can read from the terminal, so a `sudo` password prompt (the
-  `.deb` install path needs one) would otherwise hang or fail silently.
-  Reattaching stdin to the TTY fixes this; it's safe specifically because
-  this script only ever runs pasted into a real interactive terminal
-  session, never in a non-interactive CI-style context.
+- **`self-update.sh` never redirects its own stdin.** `curl | bash` feeds
+  the script's *source* into bash via stdin, and bash keeps reading the
+  rest of the script from there as it runs. An earlier version did
+  `exec < /dev/tty` near the top so `sudo` could prompt for a password —
+  but that swapped the script body for the keyboard, so bash sat waiting
+  for the remaining script to be typed and the update silently did
+  nothing (the shipped v0.2.3 script has this bug; v0.2.4 fixes it).
+  Instead, only the `.deb` path's `sudo dpkg -i` redirects `< /dev/tty`,
+  and only when a TTY is actually available.
+- **`log()` writes to stderr**, because `download_and_verify` is called
+  inside `$(...)` to capture the downloaded file's path — anything it
+  printed to stdout would end up inside that path.
 
 The script itself (Linux only, for now):
 
