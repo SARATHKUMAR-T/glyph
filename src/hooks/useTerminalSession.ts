@@ -27,6 +27,16 @@ export async function writeTerminalData(sessionId: string, data: string) {
   });
 }
 
+/** Sends clipboard text as one paste; the backend adds bracketed-paste
+ * markers when the running program has enabled them (`?2004`). */
+export async function pasteTerminalData(sessionId: string, data: string) {
+  ensureTauriRuntime();
+  return invoke<void>("paste_terminal", { sessionId, data }).catch((err: unknown) => {
+    console.error("[paste_terminal] IPC error:", err, "sessionId:", sessionId);
+    throw err;
+  });
+}
+
 export async function resizeTerminalSession(sessionId: string, request: ResizeTerminalRequest) {
   ensureTauriRuntime();
   return invoke<void>("resize_terminal", { sessionId, request }).catch((err: unknown) => {
