@@ -147,6 +147,13 @@ impl GridEngine {
         self.force_full = true;
     }
 
+    /// Forces the next `build_frame` call to emit a Full frame — used when a
+    /// fresh renderer attaches to an existing session (e.g. a pane's view
+    /// remounting) and has none of the grid's current contents yet.
+    pub fn request_full_frame(&mut self) {
+        self.force_full = true;
+    }
+
     pub fn resize(&mut self, cols: u16, rows: u16) {
         let dims = GlyphDimensions {
             cols: cols.max(1) as usize,

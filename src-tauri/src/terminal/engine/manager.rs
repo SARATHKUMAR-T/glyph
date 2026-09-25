@@ -19,6 +19,10 @@ const DEFAULT_SCROLLBACK: usize = 10_000;
 struct EngineSession {
     engine: Arc<Mutex<GridEngine>>,
     stop_flush: Arc<AtomicBool>,
+    /// Stop flag of the flush thread serving the currently attached
+    /// channel. Replaced on every `attach_channel` so only one flush thread
+    /// ever drains this session's damage at a time.
+    stop_channel: Arc<AtomicBool>,
 }
 
 pub struct EngineManager {
@@ -58,11 +62,13 @@ impl EngineManager {
         let session = EngineSession {
             engine,
             stop_flush: Arc::new(AtomicBool::new(false)),
+            stop_channel: Arc::new(AtomicBool::new(false)),
         };
 
         if let Ok(mut sessions) = self.sessions.lock() {
             if let Some(old) = sessions.insert(session_id, session) {
                 old.stop_flush.store(true, Ordering::SeqCst);
+                old.stop_channel.store(true, Ordering::SeqCst);
             }
         }
     }
@@ -102,6 +108,7 @@ impl EngineManager {
         if let Ok(mut sessions) = self.sessions.lock() {
             if let Some(session) = sessions.remove(session_id) {
                 session.stop_flush.store(true, Ordering::SeqCst);
+                session.stop_channel.store(true, Ordering::SeqCst);
             }
         }
     }
@@ -177,20 +184,35 @@ impl EngineManager {
     /// flush cadence. Only one flush thread runs per session; calling this
     /// again for the same session replaces the previous channel.
     pub fn attach_channel(&self, session_id: String, channel: Channel) {
-        let (engine, stop_flush) = {
-            let sessions = self.sessions.lock().unwrap();
-            let Some(session) = sessions.get(&session_id) else {
+        let (engine, stop_flush, stop_channel) = {
+            let mut sessions = self.sessions.lock().unwrap();
+            let Some(session) = sessions.get_mut(&session_id) else {
                 return;
             };
-            (Arc::clone(&session.engine), Arc::clone(&session.stop_flush))
+            // Retire the previous channel's flush thread. Left running, it
+            // would keep consuming the engine's damage and sending it to a
+            // renderer that no longer exists, starving the new one.
+            session.stop_channel.store(true, Ordering::SeqCst);
+            let stop_channel = Arc::new(AtomicBool::new(false));
+            session.stop_channel = Arc::clone(&stop_channel);
+            (Arc::clone(&session.engine), Arc::clone(&session.stop_flush), stop_channel)
         };
 
+        // The new channel's renderer starts blank, so its first frame must
+        // repaint the whole grid rather than only what changed since the
+        // previous channel's last frame.
+        if let Ok(mut engine) = engine.lock() {
+            engine.request_full_frame();
+        }
+
+        let stopped = move || stop_flush.load(Ordering::SeqCst) || stop_channel.load(Ordering::SeqCst);
+
         thread::spawn(move || loop {
-            if stop_flush.load(Ordering::SeqCst) {
+            if stopped() {
                 break;
             }
             thread::sleep(FLUSH_INTERVAL);
-            if stop_flush.load(Ordering::SeqCst) {
+            if stopped() {
                 break;
             }
 
@@ -198,6 +220,12 @@ impl EngineManager {
                 let Ok(mut engine) = engine.lock() else {
                     break;
                 };
+                // Re-checked under the lock: a thread retired while waiting
+                // on it must not consume the full frame requested for its
+                // replacement.
+                if stopped() {
+                    break;
+                }
                 engine.build_frame()
             };
 
