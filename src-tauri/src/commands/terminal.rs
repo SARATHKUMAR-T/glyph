@@ -1,6 +1,8 @@
 use tauri::{AppHandle, State};
 
+use crate::terminal::engine::EngineManager;
 use crate::terminal::manager::TerminalManager;
+use crate::terminal::paste::encode_paste;
 use crate::terminal::session::{
     CloseTerminalResponse, CreateTerminalRequest, ResizeTerminalRequest, TerminalErrorPayload,
     TerminalSessionInfo,
@@ -23,6 +25,21 @@ pub fn write_terminal(
 ) -> Result<(), TerminalErrorPayload> {
     manager
         .write_terminal(&session_id, data.as_bytes())
+        .map_err(Into::into)
+}
+
+/// Writes clipboard text to the PTY as a single paste, bracketed when the
+/// running program asked for it — see `terminal::paste::encode_paste`.
+#[tauri::command(rename_all = "camelCase")]
+pub fn paste_terminal(
+    manager: State<'_, TerminalManager>,
+    engine: State<'_, EngineManager>,
+    session_id: String,
+    data: String,
+) -> Result<(), TerminalErrorPayload> {
+    let encoded = encode_paste(&data, engine.bracketed_paste(&session_id));
+    manager
+        .write_terminal(&session_id, encoded.as_bytes())
         .map_err(Into::into)
 }
 

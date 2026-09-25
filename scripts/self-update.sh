@@ -8,8 +8,10 @@
 # version that already shipped. Each release carries the script it will be
 # installed by.
 #
-# Invoked as: curl -fsSL .../self-update.sh | bash -s -- <tag>
-# e.g.        curl -fsSL .../v0.3.0/scripts/self-update.sh | bash -s -- v0.3.0
+# Invoked as: sudo -v && curl -fsSL .../self-update.sh | bash -s -- <tag>
+# e.g.        sudo -v && curl -fsSL .../v0.3.0/scripts/self-update.sh | bash -s -- v0.3.0
+# (`sudo -v` caches credentials up front so the .deb path's `sudo dpkg -i`
+# doesn't have to prompt mid-pipe; the script itself runs unprivileged.)
 set -euo pipefail
 
 REPO="SARATHKUMAR-T/glyph"
@@ -43,12 +45,22 @@ RELEASE_BASE="https://github.com/${REPO}/releases/download/${TAG}"
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
+# Shared curl flags for release downloads. A stalled connection (under
+# 1 KB/s for 30s) is aborted and retried instead of hanging silently
+# forever, which looked exactly like "the update isn't doing anything".
+CURL_OPTS=(--fail --location --retry 3 --retry-delay 2 --connect-timeout 15 --speed-limit 1024 --speed-time 30)
+
 download_and_verify() {
   local asset="$1"
   local dest="$WORKDIR/$asset"
   log "Downloading ${asset}…"
-  curl -fsSL -o "$dest" "${RELEASE_BASE}/${asset}"
-  curl -fsSL -o "$WORKDIR/checksums.txt" "${RELEASE_BASE}/checksums.txt"
+  # --progress-bar draws on stderr, so it stays visible even though this
+  # function runs inside $(...). A multi-MB package can take a while on a
+  # slow link, and without progress it looks stuck.
+  curl "${CURL_OPTS[@]}" --progress-bar -o "$dest" "${RELEASE_BASE}/${asset}" \
+    || fail "Download of ${asset} failed. Check your connection and try again."
+  curl "${CURL_OPTS[@]}" --silent --show-error -o "$WORKDIR/checksums.txt" "${RELEASE_BASE}/checksums.txt" \
+    || fail "Download of checksums.txt failed. Check your connection and try again."
 
   local expected
   expected="$(grep " ${asset}\$" "$WORKDIR/checksums.txt" | awk '{print $1}')"

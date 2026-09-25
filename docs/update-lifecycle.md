@@ -178,10 +178,18 @@ indistinguishable from the user typing it themselves:
 The command is:
 
 ```
-curl -fsSL https://raw.githubusercontent.com/SARATHKUMAR-T/glyph/v0.3.0/scripts/self-update.sh | bash -s -- v0.3.0
+sudo -v && curl -fsSL https://raw.githubusercontent.com/SARATHKUMAR-T/glyph/v0.3.0/scripts/self-update.sh | bash -s -- v0.3.0
 ```
 
-Two details matter here:
+These details matter here:
+
+- **`sudo -v` runs first.** It asks for the password once, up front at a
+  normal prompt, and caches it, so the `.deb` path's `sudo dpkg -i` runs
+  without prompting partway through the `curl | bash` pipe. Only the
+  credentials are elevated: the script still runs as the user, so the
+  AppImage path keeps `$APPIMAGE` and the downloaded script never runs
+  entirely as root. (`sudo curl …` would elevate only the download, and
+  `… | sudo bash` would run the whole remote script as root.)
 
 - **The script URL is pinned to the release tag being installed**, not
   `main`. `self-update.sh` is fetched from that tag's committed copy, so a

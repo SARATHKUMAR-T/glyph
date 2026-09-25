@@ -1,6 +1,7 @@
 pub mod engine;
 pub mod manager;
 pub mod osc133;
+pub mod paste;
 pub mod pty;
 pub mod reader;
 pub mod resize;

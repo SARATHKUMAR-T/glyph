@@ -138,6 +138,14 @@ impl EngineManager {
         }
     }
 
+    /// Whether `session_id`'s program has enabled bracketed paste. False
+    /// for an unknown session, which then just gets the plain paste.
+    pub fn bracketed_paste(&self, session_id: &str) -> bool {
+        self.engine_handle(session_id)
+            .and_then(|engine| engine.lock().ok().map(|engine| engine.bracketed_paste()))
+            .unwrap_or(false)
+    }
+
     pub fn scrollback_info(&self, session_id: &str) -> Option<ScrollbackInfo> {
         let engine = self.engine_handle(session_id)?;
         let engine = engine.lock().ok()?;

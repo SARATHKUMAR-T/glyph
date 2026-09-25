@@ -16,6 +16,7 @@ import {
   closeTerminalSession,
   createTerminalSession,
   openExternalUrl,
+  pasteTerminalData,
   resizeTerminalSession,
   writeTerminalData,
 } from "../../hooks/useTerminalSession";
@@ -557,6 +558,14 @@ export function GlyphEngineTerminalView({
     );
   };
 
+  const pasteText = (text: string) => {
+    const sessionId = sessionIdRef.current;
+    if (!sessionId || !text) return;
+    void pasteTerminalData(sessionId, text).catch((error: unknown) =>
+      onSessionStatus(pane.paneId, "error", formatError(error)),
+    );
+  };
+
   const pixelToCell = (clientX: number, clientY: number): { row: number; col: number } | null => {
     const canvas = canvasRef.current;
     const renderer = rendererRef.current;
@@ -936,7 +945,7 @@ export function GlyphEngineTerminalView({
       event.preventDefault();
       void (async () => {
         const text = isTauriRuntime() ? await clipboardReadText() : await navigator.clipboard?.readText();
-        if (text) sendBytes(text);
+        if (text) pasteText(text);
       })();
       return;
     }
@@ -1048,6 +1057,15 @@ export function GlyphEngineTerminalView({
       sendBytes(value);
       event.currentTarget.value = "";
     }
+  };
+
+  // Right-click / middle-click / Edit-menu pastes land on the textarea as
+  // a native paste event. Intercept them so they go out as one paste —
+  // letting them fall through to `handleInput` would send them as raw
+  // keystrokes.
+  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    event.preventDefault();
+    pasteText(event.clipboardData.getData("text/plain"));
   };
 
   const handleCompositionStart = () => {
@@ -1382,6 +1400,7 @@ export function GlyphEngineTerminalView({
             onFocus={() => onActivatePane(pane.paneId)}
             onKeyDown={handleKeyDown}
             onInput={handleInput}
+            onPaste={handlePaste}
             onCompositionStart={handleCompositionStart}
             onCompositionUpdate={handleCompositionUpdate}
             onCompositionEnd={handleCompositionEnd}

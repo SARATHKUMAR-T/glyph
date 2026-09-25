@@ -172,6 +172,11 @@ impl GridEngine {
         self.force_full = true;
     }
 
+    /// Whether the running program has enabled bracketed paste (`?2004`).
+    pub fn bracketed_paste(&self) -> bool {
+        self.term.mode().contains(TermMode::BRACKETED_PASTE)
+    }
+
     pub fn scrollback_info(&self) -> ScrollbackInfo {
         let grid = self.term.grid();
         ScrollbackInfo {
