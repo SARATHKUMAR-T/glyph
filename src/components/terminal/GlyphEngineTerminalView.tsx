@@ -13,6 +13,7 @@ import { encodeKeyEvent } from "../../lib/terminal/keyEncoding";
 import { encodeMouseReport } from "../../lib/terminal/mouseReporting";
 import { MouseTrackingLevel } from "../../lib/terminal/engineProtocol";
 import {
+  closeTerminalSession,
   createTerminalSession,
   openExternalUrl,
   resizeTerminalSession,
@@ -366,7 +367,14 @@ export function GlyphEngineTerminalView({
           onSessionStatus(pane.paneId, "running");
         } else {
           const info = await createTerminalSession({ cols, rows, cwd: pane.cwd ?? undefined });
-          if (disposed) return;
+          if (disposed) {
+            // Unmounted while the PTY was spawning (e.g. StrictMode's
+            // mount/unmount/mount in dev): nothing will ever record or
+            // reattach to this session, so kill it instead of leaking a
+            // shell process per new pane.
+            void closeTerminalSession(info.sessionId);
+            return;
+          }
           sessionId = info.sessionId;
           sessionIdRef.current = sessionId;
           onSessionReady(pane.paneId, info);
@@ -383,6 +391,7 @@ export function GlyphEngineTerminalView({
           }
         });
         await invoke("engine_attach_channel", { sessionId, channel });
+        if (disposed) return;
 
         // Tracks the in-flight command across its two boundary events so
         // `command_finished` can pair itself with the text/grid-line
@@ -414,6 +423,12 @@ export function GlyphEngineTerminalView({
 
           onSemanticEvent(pane.paneId, enriched);
         });
+        // Cleanup may have already run while the listener was registering;
+        // drop it now or it outlives this view and duplicates events.
+        if (disposed) {
+          semUnlisten();
+          return;
+        }
         unlisteners.push(semUnlisten);
 
         if (isPaneActive) inputRef.current?.focus();

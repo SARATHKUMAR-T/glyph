@@ -208,6 +208,12 @@ export function TerminalPanePortals({
             tabId={tabId}
           />,
           container,
+          // Key the portal itself by pane id. Without it React matches the
+          // portals by array index, so a split that inserts a pane mid-order
+          // (or a close that removes one) shifts later panes onto a different
+          // container — and a portal whose container changes is unmounted
+          // and remounted, resetting that pane's terminal view.
+          pane.paneId,
         );
       })}
     </>
