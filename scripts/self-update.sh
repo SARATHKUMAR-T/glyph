@@ -8,8 +8,10 @@
 # version that already shipped. Each release carries the script it will be
 # installed by.
 #
-# Invoked as: curl -fsSL .../self-update.sh | bash -s -- <tag>
-# e.g.        curl -fsSL .../v0.3.0/scripts/self-update.sh | bash -s -- v0.3.0
+# Invoked as: sudo -v && curl -fsSL .../self-update.sh | bash -s -- <tag>
+# e.g.        sudo -v && curl -fsSL .../v0.3.0/scripts/self-update.sh | bash -s -- v0.3.0
+# (`sudo -v` caches credentials up front so the .deb path's `sudo dpkg -i`
+# doesn't have to prompt mid-pipe; the script itself runs unprivileged.)
 set -euo pipefail
 
 REPO="SARATHKUMAR-T/glyph"
