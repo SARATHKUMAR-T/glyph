@@ -116,11 +116,24 @@ export function App({ initialSession }: AppProps) {
   // it — Ctrl+U first clears whatever the user was mid-typing so the
   // command lands on a clean line instead of getting appended to it. The
   // user still has to press Enter themselves; this only ever stages text.
+  //
+  // Clicking the badge (or the Settings button) leaves DOM focus on that
+  // button, so the user's Enter would re-activate it instead of reaching
+  // the shell. Hand focus back to the pane's input sink so Enter runs the
+  // staged command.
   const handleApplyUpdate = useCallback(() => {
     if (!availableUpdate) return;
     const activePane = findPaneNode(activeTab.rootNode, activeTab.activePaneId);
     if (!activePane?.sessionId) return;
     void writeTerminalData(activePane.sessionId, "\x15" + buildUpdateCommand(availableUpdate));
+    setSettingsOpen(false);
+    requestAnimationFrame(() => {
+      document
+        .querySelector<HTMLTextAreaElement>(
+          `[data-pane-target="${activePane.paneId}"] .glyph-canvas-input-sink`,
+        )
+        ?.focus();
+    });
   }, [availableUpdate, activeTab]);
 
   const tabsRef = useRef(tabs);
