@@ -1,0 +1,99 @@
+# Builder image for Glyph on Ubuntu 20.04 (focal).
+#
+# Why this exists: the published Glyph release is built on a newer Ubuntu, so its
+# binary requires a newer GLIBC than focal's 2.31. Building inside a focal
+# container produces a binary linked against GLIBC 2.31 and WebKitGTK 4.0, both
+# of which the focal host already has -- so nothing has to be installed on the host.
+#
+# Focal ships WebKitGTK 2.38.6 as `webkit2gtk-4.0` (libsoup2). Tauri v2 / wry 0.55
+# asks pkg-config for `webkit2gtk-4.1` (the identical engine built against libsoup3).
+# The shim .pc files below satisfy that lookup with focal's 4.0 packages.
+FROM ubuntu:20.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential ca-certificates curl wget file xz-utils git pkg-config \
+      libssl-dev libgtk-3-dev libwebkit2gtk-4.0-dev libjavascriptcoregtk-4.0-dev \
+      libsoup2.4-dev librsvg2-dev libayatana-appindicator3-dev patchelf \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- pkg-config shims -----------------------------------------------------------
+# Focal's libraries are new enough for Glyph, but they are published under
+# module names/versions that the Rust -sys crates do not accept:
+#
+#   webkit2gtk-4.1 / javascriptcoregtk-4.1  focal only ships the -4.0 modules.
+#                                           Same engine (WebKitGTK 2.38.6, exactly
+#                                           the version wry requires); the -4.1
+#                                           flavour differs only in linking libsoup3.
+#   libsoup-3.0                             soup3-sys wants >= 3.0, focal has 2.72.
+#                                           wry only uses MessageHeaders from it,
+#                                           which is ABI-identical in soup2/soup3.
+#   glib/gobject/gio 2.70                   gtk-rs 0.18 declares a 2.70 baseline;
+#                                           focal has 2.64.6, which is sufficient
+#                                           for the subset gtk-rs actually calls.
+#
+# The shims keep every original -l/-I flag and only restate the module name or
+# version, so the build links against focal's real libraries -- the same ones the
+# host already has installed.
+ENV PKG_CONFIG_PATH=/usr/local/share/pkgconfig-focal-shims
+ARG PCDIR=/usr/lib/x86_64-linux-gnu/pkgconfig
+RUN set -eux; \
+    mkdir -p "$PKG_CONFIG_PATH"; \
+    for m in webkit2gtk javascriptcoregtk webkit2gtk-web-extension; do \
+      [ -f "$PCDIR/$m-4.0.pc" ] && cp "$PCDIR/$m-4.0.pc" "$PKG_CONFIG_PATH/$m-4.1.pc"; \
+    done; \
+    sed -e 's/^Version:.*/Version: 3.0.0/' -e 's/^Name:.*/Name: libsoup/' \
+        "$PCDIR/libsoup-2.4.pc" > "$PKG_CONFIG_PATH/libsoup-3.0.pc"; \
+    for m in glib-2.0 gobject-2.0 gio-2.0 gio-unix-2.0 gmodule-2.0 \
+             gmodule-export-2.0 gmodule-no-export-2.0 gthread-2.0; do \
+      [ -f "$PCDIR/$m.pc" ] && sed 's/^Version:.*/Version: 2.70.0/' "$PCDIR/$m.pc" > "$PKG_CONFIG_PATH/$m.pc"; \
+    done; \
+    pkg-config --modversion webkit2gtk-4.1 javascriptcoregtk-4.1 libsoup-3.0 glib-2.0 gio-2.0
+
+# webkit2gtk-sys, javascriptcore-rs-sys and soup3-sys additionally hardcode the
+# library names via #[link(name = "...-4.1")] / #[link(name = "soup-3.0")], which
+# bypasses pkg-config entirely. These link-time-only symlinks resolve those names
+# to focal's libraries. Only the link step sees them: the DT_NEEDED entries
+# recorded in the binary come from each target's SONAME, so the result depends on
+# libwebkit2gtk-4.0.so.37 / libjavascriptcoregtk-4.0.so.18 / libsoup-2.4.so.1 --
+# the libraries the host actually has.
+RUN set -eux; \
+    ln -sf libwebkit2gtk-4.0.so       "$PCDIR/../libwebkit2gtk-4.1.so"; \
+    ln -sf libjavascriptcoregtk-4.0.so "$PCDIR/../libjavascriptcoregtk-4.1.so"; \
+    ln -sf libsoup-2.4.so             "$PCDIR/../libsoup-3.0.so"
+
+# --- Node (for the vite/tsc frontend build) ------------------------------------
+ARG NODE_VERSION=22.14.0
+RUN set -eux; \
+    curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-linux-x64.tar.xz" \
+      | tar -xJ -C /usr/local --strip-components=1 --exclude=CHANGELOG.md --exclude=README.md --exclude=LICENSE; \
+    node --version; npm --version
+
+# --- Rust ----------------------------------------------------------------------
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:$PATH
+ARG RUST_VERSION=stable
+RUN curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain "$RUST_VERSION" \
+    && chmod -R a+w "$CARGO_HOME" "$RUSTUP_HOME" \
+    && rustc --version
+
+# --- compatibility shims for symbols focal's libraries do not export ------------
+# See docker/focal-compat.c. Built as a static archive and appended to the link
+# line by scripts/build-local.sh, so only the genuinely missing symbols are used.
+ENV GLYPH_COMPAT_LIB=/usr/local/lib/libglyphfocalcompat.a
+COPY docker/focal-compat.c /tmp/focal-compat.c
+RUN set -eux; \
+    cc -O2 -fPIC -Wall -Wextra -c /tmp/focal-compat.c -o /tmp/focal-compat.o \
+       $(pkg-config --cflags glib-2.0 gio-2.0); \
+    ar rcs "$GLYPH_COMPAT_LIB" /tmp/focal-compat.o; \
+    rm -f /tmp/focal-compat.c /tmp/focal-compat.o; \
+    nm --defined-only "$GLYPH_COMPAT_LIB"
+
+# Out-of-tree build root, writable by whatever uid the container is run as so the
+# build can run as the invoking host user and leave host-owned output.
+RUN mkdir -p /build /vendor /out && chmod 1777 /build /vendor /out
+
+WORKDIR /src
