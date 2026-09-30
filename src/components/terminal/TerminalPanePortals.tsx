@@ -45,6 +45,7 @@ type TerminalPanePortalsProps = {
   onSplitVertical?: (paneId: string) => void;
   onTitleChange?: (paneId: string, title: string) => void;
   onToggleSettings?: () => void;
+  onSaveWorkspace?: () => void;
 };
 
 /**
@@ -84,6 +85,7 @@ export function TerminalPanePortals({
   onSplitVertical,
   onTitleChange,
   onToggleSettings,
+  onSaveWorkspace,
   panes,
   paneCount,
   searchOpen,
@@ -202,6 +204,7 @@ export function TerminalPanePortals({
             onSplitVertical={onSplitVertical}
             onTitleChange={onTitleChange}
             onToggleSettings={onToggleSettings}
+            onSaveWorkspace={onSaveWorkspace}
             pane={pane}
             searchOpen={searchOpen}
             settings={settings}

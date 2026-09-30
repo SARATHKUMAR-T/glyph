@@ -106,6 +106,7 @@ Examples include:
 -   Split terminal horizontally
 -   Split terminal vertically
 -   Close active pane
+-   Expand / restore pane
 -   Copy
 -   Paste
 -   Search terminal buffer

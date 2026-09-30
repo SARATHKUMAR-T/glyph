@@ -9,14 +9,13 @@ export type ShortcutAction =
   | "split_vertical"
   | "split_horizontal"
   | "close_pane"
+  | "expand_pane"
   | "copy"
   | "paste"
   | "search"
   | "select_all"
   | "toggle_settings"
-  | "open_workspace"
-  | "save_workspace"
-  | "command_palette";
+  | "save_workspace";
 
 export type KeyCombo = {
   key: string;
@@ -37,14 +36,13 @@ export const DEFAULT_KEYBINDINGS: KeybindingsConfig = {
   split_vertical: { key: "d", ctrl: true, alt: false, shift: true, meta: false },
   split_horizontal: { key: "o", ctrl: true, alt: false, shift: true, meta: false },
   close_pane: { key: "w", ctrl: true, alt: false, shift: true, meta: false },
+  expand_pane: { key: "m", ctrl: true, alt: false, shift: true, meta: false },
   copy: { key: "c", ctrl: true, alt: false, shift: true, meta: false },
   paste: { key: "v", ctrl: true, alt: false, shift: true, meta: false },
   search: { key: "f", ctrl: true, alt: false, shift: true, meta: false },
   select_all: { key: "a", ctrl: true, alt: false, shift: true, meta: false },
   toggle_settings: { key: ",", ctrl: true, alt: false, shift: false, meta: false },
-  open_workspace: { key: "m", ctrl: true, alt: false, shift: true, meta: false },
   save_workspace: { key: "s", ctrl: true, alt: false, shift: true, meta: false },
-  command_palette: { key: "p", ctrl: true, alt: false, shift: true, meta: false },
 };
 
 export const ACTION_LABELS: Record<ShortcutAction, { label: string; description: string }> = {
@@ -56,14 +54,13 @@ export const ACTION_LABELS: Record<ShortcutAction, { label: string; description:
   split_vertical: { label: "Split Terminal Right", description: "Split current pane side-by-side (Vertical)" },
   split_horizontal: { label: "Split Terminal Down", description: "Split current pane stacked (Horizontal)" },
   close_pane: { label: "Close Active Pane", description: "Close currently focused terminal pane" },
+  expand_pane: { label: "Expand / Restore Pane", description: "Enlarge the focused split pane, or restore it (maximized window)" },
   copy: { label: "Copy", description: "Copy selected text to clipboard" },
   paste: { label: "Paste", description: "Paste text into active shell" },
   search: { label: "Find / Search Buffer", description: "Search terminal scrollback history" },
   select_all: { label: "Select All", description: "Highlight active line text" },
   toggle_settings: { label: "Toggle Settings", description: "Open or close Settings panel" },
-  open_workspace: { label: "Open Workspaces Menu", description: "Open Workspaces list / manager" },
   save_workspace: { label: "Save Current Workspace", description: "Save active layout as a workspace" },
-  command_palette: { label: "Command Palette", description: "Search and run any Glyph command" },
 };
 
 const STORAGE_KEY = "glyph_keybindings_v5";
