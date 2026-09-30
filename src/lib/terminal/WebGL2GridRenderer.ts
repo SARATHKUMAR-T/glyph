@@ -12,6 +12,7 @@ import {
 } from "./engineProtocol";
 import type { GridRenderer, SelectionRange } from "./GridRenderer";
 import { measureCellMetrics } from "./CanvasGridRenderer";
+import { pickReadableColor } from "./contrast";
 import { GlyphAtlas } from "./webgl/glyphAtlas";
 
 interface RendererOptions {
@@ -513,6 +514,14 @@ export class WebGL2GridRenderer implements GridRenderer {
     const plainSelectionBg =
       this.selection && this.selection.kind !== "search" ? this.themeColor("--glyph-selection-bg", "rgba(255, 48, 48, 0.35)") : null;
 
+    // Light themes only: selected glyphs are contrast-checked against the
+    // selection fill (see contrast.ts), so text a program printed in a
+    // color meant for a dark background stays readable once selected.
+    const readableSelection =
+      plainSelectionBg && getComputedStyle(this.canvas).getPropertyValue("--glyph-color-scheme").trim() === "light"
+        ? { selectionBg: plainSelectionBg, themeBg: this.themeColor("--glyph-bg", "#ffffff") }
+        : null;
+
     // --- Backgrounds: exactly cols*rows instances, always. ---
     const bg = new Float32Array(cols * rows * SOLID_STRIDE);
     for (let row = 0; row < rows; row++) {
@@ -557,6 +566,7 @@ export class WebGL2GridRenderer implements GridRenderer {
     const glyphData: number[] = [];
     for (let row = 0; row < rows; row++) {
       const searchCols = searchMatchFg ? this.selectionColsForRow(row) : null;
+      const readableCols = readableSelection ? this.selectionColsForRow(row) : null;
       for (let col = 0; col < cols; col++) {
         const idx = row * cols + col;
         const cell = this.grid[idx];
@@ -572,7 +582,12 @@ export class WebGL2GridRenderer implements GridRenderer {
         if (!rect) continue;
 
         const inSearchMatch = searchCols !== null && col >= searchCols[0] && col < searchCols[1];
-        const [r, g, b, a] = inSearchMatch ? searchMatchFg! : unpackRgba(this.resolvedFg(cell));
+        let [r, g, b, a] = inSearchMatch ? searchMatchFg! : unpackRgba(this.resolvedFg(cell));
+        if (readableCols && col >= readableCols[0] && col < readableCols[1]) {
+          const cellBg = unpackRgba(this.resolvedBg(cell));
+          const [br, bgG, bb] = cellBg[3] > 0 ? cellBg : readableSelection!.themeBg;
+          [r, g, b, a] = pickReadableColor([r, g, b, a], [br, bgG, bb], readableSelection!.selectionBg);
+        }
         const dim = !inSearchMatch && (cell.flags & CellFlags.DIM) !== 0;
         glyphData.push(
           col,

@@ -25,7 +25,10 @@ export type GlyphCssVars = {
    * (which is tuned for subtle hover states, not a highlight you're meant
    * to read at a glance) since it's painted as a real background layer
    * behind the glyphs, the same way selection reads in a normal terminal
-   * emulator (Alacritty, iTerm2, VS Code). */
+   * emulator (Alacritty, iTerm2, VS Code). Dark themes use a translucent
+   * accent tint; light themes use an opaque pale fill instead, since a
+   * tint over a dark cell background (a TUI's status bar, inverse text)
+   * stays dark and swallows dark text on an otherwise light screen. */
   "--glyph-selection-bg": string;
   /** Search-match highlight background — a solid, high-contrast
    * "highlighter" color distinct from `--glyph-accent` (which many themes
@@ -332,7 +335,7 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#268bd2",
       "--glyph-accent-dim": "rgba(38, 139, 210, 0.14)",
       "--glyph-accent-glow": "rgba(38, 139, 210, 0.3)",
-      "--glyph-selection-bg": "rgba(38, 139, 210, 0.30)",
+      "--glyph-selection-bg": "#cfe3f1",
       "--glyph-search-match": "#f5d76e",
       "--glyph-search-match-fg": "#002b36",
       "--glyph-line": "rgba(0, 0, 0, 0.1)",
@@ -364,7 +367,7 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#0969da",
       "--glyph-accent-dim": "rgba(9, 105, 218, 0.12)",
       "--glyph-accent-glow": "rgba(9, 105, 218, 0.25)",
-      "--glyph-selection-bg": "rgba(9, 105, 218, 0.28)",
+      "--glyph-selection-bg": "#add6ff",
       "--glyph-search-match": "#fff8c5",
       "--glyph-search-match-fg": "#1f2328",
       "--glyph-line": "rgba(0, 0, 0, 0.1)",
@@ -396,7 +399,7 @@ const themes: GlyphTheme[] = [
       "--glyph-accent": "#2a4d6e",
       "--glyph-accent-dim": "rgba(42, 77, 110, 0.12)",
       "--glyph-accent-glow": "rgba(42, 77, 110, 0.25)",
-      "--glyph-selection-bg": "rgba(42, 77, 110, 0.30)",
+      "--glyph-selection-bg": "#c8d6e2",
       "--glyph-search-match": "#f0d78c",
       "--glyph-search-match-fg": "#1c1c1c",
       "--glyph-line": "rgba(0, 0, 0, 0.09)",
