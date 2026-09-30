@@ -1,4 +1,5 @@
 mod commands;
+mod data_migration;
 mod events;
 pub mod terminal;
 mod tray;
@@ -22,6 +23,8 @@ use terminal::manager::TerminalManager;
 use workspace::manager::WorkspaceManager;
 
 pub fn run() {
+    data_migration::migrate_legacy_data_dir();
+
     let workspace_manager = WorkspaceManager::default();
     let ws_mgr_clone = workspace_manager.clone();
 
