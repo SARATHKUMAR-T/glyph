@@ -12,9 +12,8 @@ type ShortcutHandlers = {
   onPrevTab?: () => void;
   onSearch: () => void;
   onToggleSettings: () => void;
-  onOpenWorkspace?: () => void;
   onSaveWorkspace?: () => void;
-  onCommandPalette?: () => void;
+  onToggleExpandPane?: () => void;
 };
 
 export function useKeyboardShortcuts({
@@ -28,9 +27,8 @@ export function useKeyboardShortcuts({
   onSplitHorizontal,
   onSplitVertical,
   onToggleSettings,
-  onOpenWorkspace,
   onSaveWorkspace,
-  onCommandPalette,
+  onToggleExpandPane,
 }: ShortcutHandlers) {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -103,13 +101,6 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      if (keybindings.open_workspace && matchesKeyCombo(event, keybindings.open_workspace)) {
-        event.preventDefault();
-        event.stopPropagation();
-        onOpenWorkspace?.();
-        return;
-      }
-
       if (keybindings.save_workspace && matchesKeyCombo(event, keybindings.save_workspace)) {
         event.preventDefault();
         event.stopPropagation();
@@ -117,10 +108,10 @@ export function useKeyboardShortcuts({
         return;
       }
 
-      if (keybindings.command_palette && matchesKeyCombo(event, keybindings.command_palette)) {
+      if (keybindings.expand_pane && matchesKeyCombo(event, keybindings.expand_pane)) {
         event.preventDefault();
         event.stopPropagation();
-        onCommandPalette?.();
+        onToggleExpandPane?.();
         return;
       }
     };
@@ -138,8 +129,7 @@ export function useKeyboardShortcuts({
     onSplitHorizontal,
     onSplitVertical,
     onToggleSettings,
-    onOpenWorkspace,
     onSaveWorkspace,
-    onCommandPalette,
+    onToggleExpandPane,
   ]);
 }

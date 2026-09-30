@@ -1,6 +1,6 @@
 [package]
 name = "glyph-terminal"
-version = "0.2.7"
+version = "0.2.8"
 description = "A Nothing-inspired Linux terminal emulator."
 authors = ["Sarath"]
 edition = "2021"

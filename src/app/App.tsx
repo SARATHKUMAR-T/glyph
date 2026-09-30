@@ -22,9 +22,7 @@ import { useTerminalTheme } from "../hooks/useTerminalTheme";
 import { useCursorStyle } from "../hooks/useCursorStyle";
 import { useIsWindowMaximized } from "../hooks/useIsWindowMaximized";
 import { getTheme } from "../lib/terminal/themes";
-import { ACTION_LABELS, formatKeyCombo, useKeybindings } from "../hooks/useKeybindings";
-import { CommandPalette, type PaletteCommand } from "../components/palette/CommandPalette";
-import { getAllThemes } from "../lib/terminal/themes";
+import { useKeybindings } from "../hooks/useKeybindings";
 import { useWorkspaces } from "../hooks/useWorkspaces";
 import { isTauriRuntime } from "../lib/terminal/events";
 import { getTerminalCwd, writeTerminalData } from "../hooks/useTerminalSession";
@@ -68,7 +66,6 @@ export function App({ initialSession }: AppProps) {
   const [activeTabId, setActiveTabId] = useState(initialSession.activeTabId);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const [paletteOpen, setPaletteOpen] = useState(false);
   useSettingsAutoDismiss(settingsOpen, () => setSettingsOpen(false));
   const { blocksByTab, clearBlocks, ingestSemanticEvent } = useTerminalBlocks();
   const { settings, updateSettings } = useTerminalSettings();
@@ -172,6 +169,22 @@ export function App({ initialSession }: AppProps) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [expandedPane]);
+
+  // Expands the given pane, or restores the split if one is already
+  // enlarged. Expanding is only offered for a split tab in a maximized
+  // window — the same conditions the pane header's expand button shows under.
+  const toggleExpandPane = useCallback(
+    (tabId: string, paneId: string) => {
+      setExpandedPane((current) => {
+        if (current) return null;
+        if (!isWindowMaximized) return null;
+        const tab = tabsRef.current.find((t) => t.clientId === tabId);
+        if (!tab || getAllPanesInTree(tab.rootNode).length <= 1) return null;
+        return { tabId, paneId };
+      });
+    },
+    [isWindowMaximized],
+  );
 
   const addTerminal = useCallback(async () => {
     let inheritedCwd: string | undefined;
@@ -491,103 +504,17 @@ export function App({ initialSession }: AppProps) {
       setSettingsOpen(false);
     },
     onToggleSettings: () => setSettingsOpen((open) => !open),
-    onOpenWorkspace: () => {
-      setManageWorkspacesOpen(true);
-      setSettingsOpen(false);
-    },
     onSaveWorkspace: () => {
       setSaveCurrentWorkspaceOpen(true);
       setSettingsOpen(false);
     },
-    onCommandPalette: () => setPaletteOpen((open) => !open),
+    onToggleExpandPane: () => {
+      const activeTab = tabsRef.current.find((t) => t.clientId === activeTabId);
+      if (activeTab) {
+        toggleExpandPane(activeTab.clientId, activeTab.activePaneId);
+      }
+    },
   });
-
-  // Reuses the exact same handlers `useKeyboardShortcuts` above dispatches
-  // to, so the palette can never drift out of sync with what its keyboard
-  // shortcut actually does. Pane-scoped actions (copy/paste/select-all/
-  // close-pane) aren't listed here — those are handled inside whichever
-  // `GlyphEngineTerminalView` currently has focus, not at this app level,
-  // so there's no single handler here to point a palette entry at without
-  // deeper plumbing than this pass covers.
-  const paletteCommands = useMemo<PaletteCommand[]>(
-    () => [
-      { id: "new_tab", label: ACTION_LABELS.new_tab.label, shortcut: formatKeyCombo(keybindings.new_tab), run: addTerminal },
-      { id: "new_window", label: ACTION_LABELS.new_window.label, shortcut: formatKeyCombo(keybindings.new_window), run: openNewWindow },
-      {
-        id: "close_tab",
-        label: ACTION_LABELS.close_tab.label,
-        shortcut: formatKeyCombo(keybindings.close_tab),
-        run: () => {
-          const activeTab = tabsRef.current.find((t) => t.clientId === activeTabId);
-          if (activeTab) closePane(activeTab.clientId, activeTab.activePaneId);
-        },
-      },
-      {
-        id: "split_vertical",
-        label: ACTION_LABELS.split_vertical.label,
-        shortcut: formatKeyCombo(keybindings.split_vertical),
-        run: () => void splitActiveTerminal("vertical"),
-      },
-      {
-        id: "split_horizontal",
-        label: ACTION_LABELS.split_horizontal.label,
-        shortcut: formatKeyCombo(keybindings.split_horizontal),
-        run: () => void splitActiveTerminal("horizontal"),
-      },
-      { id: "next_tab", label: ACTION_LABELS.next_tab.label, shortcut: formatKeyCombo(keybindings.next_tab), run: handleNextTab },
-      { id: "prev_tab", label: ACTION_LABELS.prev_tab.label, shortcut: formatKeyCombo(keybindings.prev_tab), run: handlePrevTab },
-      {
-        id: "search",
-        label: ACTION_LABELS.search.label,
-        shortcut: formatKeyCombo(keybindings.search),
-        run: () => {
-          setSearchOpen(true);
-          setSettingsOpen(false);
-        },
-      },
-      {
-        id: "toggle_settings",
-        label: ACTION_LABELS.toggle_settings.label,
-        shortcut: formatKeyCombo(keybindings.toggle_settings),
-        run: () => setSettingsOpen((open) => !open),
-      },
-      {
-        id: "open_workspace",
-        label: ACTION_LABELS.open_workspace.label,
-        shortcut: formatKeyCombo(keybindings.open_workspace),
-        run: () => {
-          setManageWorkspacesOpen(true);
-          setSettingsOpen(false);
-        },
-      },
-      {
-        id: "save_workspace",
-        label: ACTION_LABELS.save_workspace.label,
-        shortcut: formatKeyCombo(keybindings.save_workspace),
-        run: () => {
-          setSaveCurrentWorkspaceOpen(true);
-          setSettingsOpen(false);
-        },
-      },
-      ...getAllThemes().map((theme) => ({
-        id: `theme:${theme.id}`,
-        label: `Theme: ${theme.name}`,
-        group: "themes",
-        run: () => updateSettings({ themeId: theme.id }),
-      })),
-    ],
-    [
-      keybindings,
-      activeTabId,
-      addTerminal,
-      openNewWindow,
-      closePane,
-      splitActiveTerminal,
-      handleNextTab,
-      handlePrevTab,
-      updateSettings,
-    ],
-  );
 
   const currentExpandedTab = tabs.find((t) => t.clientId === expandedPane?.tabId);
   const expandedPaneModel =
@@ -699,9 +626,7 @@ export function App({ initialSession }: AppProps) {
                   onClosePane={(paneId) => closePane(tab.clientId, paneId)}
                   onCloseSearch={() => setSearchOpen(false)}
                   onCloseTerminal={() => closePane(tab.clientId, tab.activePaneId)}
-                  onExpandPane={(paneId) =>
-                    setExpandedPane({ tabId: tab.clientId, paneId })
-                  }
+                  onExpandPane={(paneId) => toggleExpandPane(tab.clientId, paneId)}
                   onNewTerminal={addTerminal}
                   onNewWindow={openNewWindow}
                   onNextTab={handleNextTab}
@@ -715,6 +640,10 @@ export function App({ initialSession }: AppProps) {
                   onSplitVertical={(paneId) => void splitActiveTerminal("vertical", paneId)}
                   onTitleChange={handleTitleChange}
                   onToggleSettings={() => setSettingsOpen((open) => !open)}
+                  onSaveWorkspace={() => {
+                    setSaveCurrentWorkspaceOpen(true);
+                    setSettingsOpen(false);
+                  }}
                 />
               </div>
             );
@@ -819,7 +748,6 @@ export function App({ initialSession }: AppProps) {
           onSaveWorkspace={saveWorkspace}
           onDeleteWorkspace={deleteWorkspace}
         />
-        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={paletteCommands} />
       </main>
     </div>
   );

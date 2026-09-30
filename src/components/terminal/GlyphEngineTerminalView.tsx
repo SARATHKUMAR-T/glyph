@@ -65,6 +65,7 @@ export type TerminalViewProps = {
   onTitleChange?: (paneId: string, title: string) => void;
   isWindowMaximized?: boolean;
   onToggleSettings?: () => void;
+  onSaveWorkspace?: () => void;
 };
 
 const LINE_HEIGHT = 1.18;
@@ -232,6 +233,7 @@ export function GlyphEngineTerminalView({
   onSplitHorizontal,
   onSplitVertical,
   onToggleSettings,
+  onSaveWorkspace,
   pane,
   searchOpen,
   settings,
@@ -973,6 +975,11 @@ export function GlyphEngineTerminalView({
         onClosePane?.(pane.paneId);
         return;
       }
+      if (matchesKeyCombo(event.nativeEvent, keybindings.expand_pane)) {
+        event.preventDefault();
+        onExpandPane?.(pane.paneId);
+        return;
+      }
       if (matchesKeyCombo(event.nativeEvent, keybindings.new_tab)) {
         event.preventDefault();
         onNewTerminal?.();
@@ -1006,6 +1013,11 @@ export function GlyphEngineTerminalView({
       if (matchesKeyCombo(event.nativeEvent, keybindings.toggle_settings)) {
         event.preventDefault();
         onToggleSettings?.();
+        return;
+      }
+      if (matchesKeyCombo(event.nativeEvent, keybindings.save_workspace)) {
+        event.preventDefault();
+        onSaveWorkspace?.();
         return;
       }
     }
