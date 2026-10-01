@@ -634,33 +634,6 @@ export class WebGL2GridRenderer implements GridRenderer {
         }
       }
     }
-    if (this.selection && this.selection.kind !== "search") {
-      // Fill is already baked into the background pass above (see
-      // `plainSelectionBg`) — only the solid-accent 1px box border is
-      // drawn here, on top of the glyphs, the same "-dim fill, solid-accent
-      // border" pairing the app uses elsewhere for selected/focused state.
-      // Border quads are thin filled rects — WebGL has no native
-      // stroke-rect — sized from a target px thickness converted into this
-      // pass's cell-unit coordinate space. Top/bottom edges only draw on
-      // the selection's actual first/last row, so a multi-line selection
-      // reads as one outlined block instead of a line between every row.
-      const [br, bg, bb, ba] = this.themeColor("--glyph-accent", "#ff3030");
-      const borderPx = 1.5;
-      const bx = this.cellWidth > 0 ? borderPx / this.cellWidth : 0;
-      const by = this.cellHeight > 0 ? borderPx / this.cellHeight : 0;
-      const sel = this.selection;
-      const topRow = Math.min(sel.startRow, sel.endRow);
-      const bottomRow = Math.max(sel.startRow, sel.endRow);
-      for (let row = 0; row < rows; row++) {
-        const cols_ = this.selectionColsForRow(row);
-        if (!cols_) continue;
-        const [fromCol, toCol] = cols_;
-        deco.push(fromCol, row, bx, 1, br, bg, bb, ba);
-        deco.push(toCol - bx, row, bx, 1, br, bg, bb, ba);
-        if (row === topRow) deco.push(fromCol, row, toCol - fromCol, by, br, bg, bb, ba);
-        if (row === bottomRow) deco.push(fromCol, row + 1 - by, toCol - fromCol, by, br, bg, bb, ba);
-      }
-    }
     if (this.cursor.visible && this.cursor.blinkOn) {
       const accent = this.themeColor("--glyph-accent", "#ff3030");
       pushCursorQuad(deco, this.cursor, this.cellWidth, this.cellHeight, accent, this.focused);
@@ -732,8 +705,7 @@ function pushCursorQuad(
     // Unfocused pane (e.g. the non-active side of a split): a hollow
     // outline instead of the focused pane's solid fill, so only one pane
     // ever reads as having an "active" cursor. WebGL has no native
-    // stroke-rect, so a Block cursor is four thin filled edge quads —
-    // the same technique the selection border above uses.
+    // stroke-rect, so a Block cursor is four thin filled edge quads.
     const dimA = a * 0.55;
     const bx = cellWidth > 0 ? 1 / cellWidth : 0;
     const by = cellHeight > 0 ? 1 / cellHeight : 0;

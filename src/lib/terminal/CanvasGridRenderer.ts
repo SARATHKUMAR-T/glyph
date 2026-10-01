@@ -332,59 +332,25 @@ export class CanvasGridRenderer implements GridRenderer {
       col = end;
     }
 
-    if (selCols) {
+    // A plain selection is only its fill, painted before the glyph pass
+    // above (see `isPlainSelection`) — no outline, as in other terminals.
+    // A found search match instead gets a solid, per-theme "highlighter":
+    // an opaque highlight color plus a redraw of the match's own text in a
+    // theme-tuned ink color, legible whatever colors the text had.
+    if (selCols && this.selection?.kind === "search") {
       const [fromCol, toCol] = selCols;
-      if (this.selection?.kind === "search") {
-        // A found match gets a solid, per-theme "highlighter" treatment —
-        // opaque highlight color plus a redraw of the match's own text in
-        // a theme-tuned ink color — rather than the translucent tint below,
-        // so it reads as an unmistakable highlight regardless of what was
-        // already under it (unlike a translucent overlay, legible on any
-        // background/foreground combination the matched text happened to
-        // have).
-        ctx.fillStyle = this.themeColor("--glyph-search-match", "#ffcc00");
-        ctx.fillRect(fromCol * cellWidth, y, (toCol - fromCol) * cellWidth, cellHeight);
+      ctx.fillStyle = this.themeColor("--glyph-search-match", "#ffcc00");
+      ctx.fillRect(fromCol * cellWidth, y, (toCol - fromCol) * cellWidth, cellHeight);
 
-        let matchText = "";
-        for (let c = fromCol; c < toCol; c++) matchText += this.text[base + c];
-        const matchCell = this.grid[base + fromCol];
-        const bold = (matchCell.flags & CellFlags.BOLD) !== 0;
-        const italic = (matchCell.flags & CellFlags.ITALIC) !== 0;
-        ctx.font = `${italic ? "italic " : ""}${bold ? "700" : "400"} ${this.opts.fontSize}px ${this.opts.fontFamily}`;
-        ctx.textBaseline = "alphabetic";
-        ctx.fillStyle = this.themeColor("--glyph-search-match-fg", "#040406");
-        ctx.fillText(matchText, fromCol * cellWidth, y + baseline);
-      } else {
-        // Fill was already painted before the glyph pass above (see
-        // `isPlainSelection`); a solid-accent 1px box border on top of the
-        // already-drawn glyphs is all that's left — the same "-dim fill,
-        // solid-accent border" pairing the rest of the app uses for
-        // selected/focused state (see e.g. workspace.css). Only the row(s)
-        // at the very top/bottom of the selection get a top/bottom edge,
-        // so a multi-line selection reads as a single outlined block
-        // rather than a horizontal line between every row.
-        const sel = this.selection!;
-        const isTopRow = row === Math.min(sel.startRow, sel.endRow);
-        const isBottomRow = row === Math.max(sel.startRow, sel.endRow);
-        const x0 = fromCol * cellWidth;
-        const x1 = toCol * cellWidth;
-        ctx.strokeStyle = this.themeColor("--glyph-accent", "#ff3030");
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(x0 + 0.5, y);
-        ctx.lineTo(x0 + 0.5, y + cellHeight);
-        ctx.moveTo(x1 - 0.5, y);
-        ctx.lineTo(x1 - 0.5, y + cellHeight);
-        if (isTopRow) {
-          ctx.moveTo(x0, y + 0.5);
-          ctx.lineTo(x1, y + 0.5);
-        }
-        if (isBottomRow) {
-          ctx.moveTo(x0, y + cellHeight - 0.5);
-          ctx.lineTo(x1, y + cellHeight - 0.5);
-        }
-        ctx.stroke();
-      }
+      let matchText = "";
+      for (let c = fromCol; c < toCol; c++) matchText += this.text[base + c];
+      const matchCell = this.grid[base + fromCol];
+      const bold = (matchCell.flags & CellFlags.BOLD) !== 0;
+      const italic = (matchCell.flags & CellFlags.ITALIC) !== 0;
+      ctx.font = `${italic ? "italic " : ""}${bold ? "700" : "400"} ${this.opts.fontSize}px ${this.opts.fontFamily}`;
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = this.themeColor("--glyph-search-match-fg", "#040406");
+      ctx.fillText(matchText, fromCol * cellWidth, y + baseline);
     }
 
     if (this.cursor.line === row && this.cursor.visible && this.cursor.blinkOn) {

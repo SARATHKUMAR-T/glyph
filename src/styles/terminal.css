@@ -9,7 +9,7 @@
   pointer-events: none;
   visibility: hidden;
   border: 1px solid var(--glyph-line);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
   box-sizing: border-box;
@@ -61,7 +61,7 @@
 }
 
 .pane-status-error {
-  background: #d71921;
+  background: var(--glyph-danger);
 }
 
 .pane-header-controls {
@@ -77,12 +77,12 @@
   width: 22px;
   height: 20px;
   border: 1px solid var(--glyph-line);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: rgba(255, 255, 255, 0.03);
   color: var(--glyph-fg-muted);
   cursor: pointer;
   padding: 0;
-  transition: all 120ms ease;
+  transition: all var(--motion-fast);
 }
 
 .pane-control-btn svg {
@@ -117,12 +117,12 @@
   width: 20px;
   height: 20px;
   border: 1px solid transparent;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--nothing-gray-300);
   cursor: pointer;
   padding: 0;
-  transition: all 0.12s ease;
+  transition: all var(--motion-fast);
 }
 
 .pane-btn:hover {
@@ -132,8 +132,8 @@
 }
 
 .pane-btn-close:hover {
-  border-color: rgba(255, 48, 48, 0.5);
-  background: rgba(255, 48, 48, 0.25);
+  border-color: var(--glyph-danger-line);
+  background: var(--glyph-danger-bg);
   color: var(--nothing-white);
 }
 
@@ -200,7 +200,7 @@
 .split-resizer:hover,
 .split-resizer.is-dragging {
   background: var(--nothing-red-bright);
-  box-shadow: 0 0 10px rgba(255, 48, 48, 0.8);
+  box-shadow: 0 0 10px var(--glyph-accent-glow);
 }
 
 .split-resizer-line {
@@ -240,7 +240,7 @@
   height: 22px;
   padding: 0 6px;
   border: 1px solid var(--glyph-line);
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: var(--glyph-surface);
   cursor: default;
   transition: border-color 120ms ease, background 120ms ease;
@@ -256,7 +256,7 @@
 }
 
 .terminal-block-error {
-  border-color: color-mix(in srgb, #d71921 45%, var(--glyph-line));
+  border-color: color-mix(in srgb, var(--glyph-danger) 45%, var(--glyph-line));
 }
 
 .terminal-block-header {
@@ -285,15 +285,15 @@
 }
 
 .block-dot.block-success {
-  background: #2fb344;
+  background: var(--glyph-success);
 }
 
 .block-dot.block-error {
-  background: #d71921;
+  background: var(--glyph-danger);
 }
 
 .block-dot.block-interrupted {
-  background: #d99a2b;
+  background: var(--glyph-warning);
 }
 
 @keyframes block-dot-pulse {
@@ -335,12 +335,12 @@
   width: 16px;
   height: 16px;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--glyph-fg-muted);
   cursor: pointer;
   padding: 0;
-  transition: all 120ms ease;
+  transition: all var(--motion-fast);
 }
 
 .terminal-block-action-btn:hover:not(:disabled) {
@@ -492,7 +492,7 @@
   left: 1px;
   right: 1px;
   min-height: 24px;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
   background: var(--glyph-accent-glow);
   cursor: pointer;
   transition: background 140ms ease;
@@ -516,7 +516,7 @@
   gap: 4px;
   padding: 4px 6px;
   border: 1px solid var(--glyph-line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--glyph-surface-raised);
   box-shadow: 0 12px 32px var(--glyph-shadow), 0 2px 8px rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(12px);
@@ -541,7 +541,7 @@
   height: 28px;
   border: 1px solid var(--glyph-line);
   outline: none;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   padding: 0 10px;
   color: var(--glyph-fg);
   background: var(--glyph-surface);
@@ -585,12 +585,12 @@
   width: 28px;
   height: 28px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--glyph-fg-muted);
   cursor: pointer !important;
   padding: 0;
-  transition: all 120ms ease;
+  transition: all var(--motion-fast);
   user-select: none;
   flex-shrink: 0;
 }
@@ -624,7 +624,7 @@
 }
 
 .terminal-search-error {
-  color: var(--glyph-error, #e5484d);
+  color: var(--glyph-danger);
   pointer-events: auto;
   cursor: help;
 }
@@ -703,11 +703,11 @@
   color: var(--glyph-fg-muted);
   cursor: pointer;
   padding: 5px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.12s ease;
+  transition: all var(--motion-fast);
 }
 
 .expanded-pane-close:hover {
@@ -720,7 +720,7 @@
   font-size: 10px;
   font-weight: 500;
   padding: 2px 7px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--glyph-accent-dim);
   color: var(--glyph-accent);
   border: 1px solid var(--glyph-accent-glow);
@@ -736,7 +736,7 @@
 .expanded-pane-btn {
   background: var(--glyph-surface);
   border: 1px solid var(--glyph-line);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--glyph-fg-muted);
   padding: 4px 8px;
   font-family: var(--nothing-mono);
@@ -746,7 +746,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  transition: all 0.12s ease;
+  transition: all var(--motion-fast);
 }
 
 .expanded-pane-btn:hover {
@@ -789,7 +789,7 @@
   justify-content: center;
   background: color-mix(in srgb, var(--glyph-surface) 50%, transparent);
   border: 1px dashed var(--glyph-line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--glyph-fg-muted);
   font-family: var(--nothing-mono);
   font-size: 11px;

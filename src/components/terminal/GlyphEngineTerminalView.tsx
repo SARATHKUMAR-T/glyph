@@ -96,6 +96,29 @@ function wordBoundsAt(text: string, col: number): [number, number] {
   return [start, end];
 }
 
+/** Whether a selection covers nothing but blank cells — e.g. a click on
+ * empty space that jittered a pixel or two. Such a selection would paint
+ * an empty highlight box and copy nothing, so it's treated as no selection.
+ * `rowText` returns a viewport row padded to full width with spaces. */
+function isBlankSelection(sel: SelectionRange, rowText: (row: number) => string): boolean {
+  // Normalize so (startRow, startCol) is the earlier end of the selection.
+  const forward = sel.startRow < sel.endRow || (sel.startRow === sel.endRow && sel.startCol <= sel.endCol);
+  const [top, firstCol, bottom, lastCol] = forward
+    ? [sel.startRow, sel.startCol, sel.endRow, sel.endCol]
+    : [sel.endRow, sel.endCol, sel.startRow, sel.startCol];
+  for (let row = top; row <= bottom; row++) {
+    const text = rowText(row);
+    let from = row === top ? firstCol : 0;
+    let to = row === bottom ? lastCol : text.length - 1;
+    if (sel.block) {
+      from = Math.min(sel.startCol, sel.endCol);
+      to = Math.max(sel.startCol, sel.endCol);
+    }
+    if (text.slice(from, to + 1).trim()) return false;
+  }
+  return true;
+}
+
 /** Splits a rendered line into its shell-prompt prefix (matched by the
  * same heuristic the old xterm.js-based TerminalView used: text up to and
  * including the last `$ `/`# `/`% `/`> ` prompt terminator) and whatever
@@ -804,19 +827,32 @@ export function GlyphEngineTerminalView({
     const clickCount = sameSpot && now - lastClick.time < MULTI_CLICK_MS ? Math.min(lastClick.count + 1, 3) : 1;
     clickTrackRef.current = { row: cell.row, col: cell.col, time: now, count: clickCount };
 
+    // Double/triple-click select the word/line under the pointer — on a
+    // blank cell or an empty line there's nothing to select, so the click
+    // just clears any existing selection instead of highlighting blanks.
     if (clickCount >= 3) {
-      const sel: SelectionRange = { startRow: cell.row, startCol: 0, endRow: cell.row, endCol: lastSizeRef.current.cols - 1, block: false };
+      dragRef.current = null;
+      const lineEnd = renderer.getRowText(cell.row).trimEnd().length;
+      if (lineEnd === 0) {
+        clearSelection();
+        return;
+      }
+      const sel: SelectionRange = { startRow: cell.row, startCol: 0, endRow: cell.row, endCol: lineEnd - 1, block: false };
       renderer.setSelection(sel);
       void commitSelection(sel);
-      dragRef.current = null;
       return;
     }
     if (clickCount === 2) {
-      const [start, end] = wordBoundsAt(renderer.getRowText(cell.row), cell.col);
+      dragRef.current = null;
+      const rowText = renderer.getRowText(cell.row);
+      if (!rowText[cell.col]?.trim()) {
+        clearSelection();
+        return;
+      }
+      const [start, end] = wordBoundsAt(rowText, cell.col);
       const sel: SelectionRange = { startRow: cell.row, startCol: start, endRow: cell.row, endCol: end, block: false };
       renderer.setSelection(sel);
       void commitSelection(sel);
-      dragRef.current = null;
       return;
     }
 
@@ -854,7 +890,8 @@ export function GlyphEngineTerminalView({
         drag.moved = true;
       }
       if (drag.moved) {
-        renderer.setSelection({ startRow: drag.row, startCol: drag.col, endRow: cell.row, endCol: cell.col, block: drag.block });
+        const sel: SelectionRange = { startRow: drag.row, startCol: drag.col, endRow: cell.row, endCol: cell.col, block: drag.block };
+        renderer.setSelection(isBlankSelection(sel, (row) => renderer.getRowText(row)) ? null : sel);
       }
       return;
     }
@@ -915,7 +952,8 @@ export function GlyphEngineTerminalView({
     if (drag && drag.moved && renderer) {
       const cell = pixelToCell(event.clientX, event.clientY) ?? { row: drag.row, col: drag.col };
       const sel: SelectionRange = { startRow: drag.row, startCol: drag.col, endRow: cell.row, endCol: cell.col, block: drag.block };
-      void commitSelection(sel);
+      if (isBlankSelection(sel, (row) => renderer.getRowText(row))) clearSelection();
+      else void commitSelection(sel);
       return;
     }
 

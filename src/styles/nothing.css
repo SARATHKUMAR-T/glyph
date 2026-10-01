@@ -19,6 +19,22 @@ body,
     "Liberation Mono",
     monospace;
 
+  /* Shape and motion scale — every radius and hover transition in the UI
+     comes from here, so controls read as one family. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --motion-fast: 120ms ease;
+
+  /* Status colors. Deliberately theme-independent: an error or a
+     destructive action reads red whatever the accent is, so these never
+     reuse --glyph-accent (which is red only in Nothing Dark). */
+  --glyph-danger:    #e5484d;
+  --glyph-danger-bg: color-mix(in srgb, var(--glyph-danger) 22%, transparent);
+  --glyph-danger-line: color-mix(in srgb, var(--glyph-danger) 50%, transparent);
+  --glyph-success:   #2fb344;
+  --glyph-warning:   #d99a2b;
+
   /* ── Glyph theme tokens — defaults for Nothing Dark.
         useTerminalTheme() overrides these at runtime via
         document.documentElement.style.setProperty(). ── */
@@ -126,7 +142,7 @@ body,
   height: 9px;
   border-radius: 50%;
   background: var(--nothing-red-bright);
-  box-shadow: 0 0 18px rgba(255, 48, 48, 0.76);
+  box-shadow: 0 0 18px var(--glyph-accent-glow);
 }
 
 .brand-text {
@@ -179,7 +195,7 @@ body,
   flex-wrap: wrap;
   gap: 6px 12px;
   padding: 5px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--glyph-surface-raised);
   border: 1px solid var(--glyph-line);
   font-family: var(--nothing-mono);
@@ -296,9 +312,9 @@ body,
   gap: 2px;
   height: 26px;
   padding-left: 2px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--nothing-red-bright);
-  background: rgba(215, 25, 33, 0.14);
+  background: var(--glyph-accent-dim);
   margin-right: 6px;
 }
 
@@ -321,7 +337,7 @@ body,
 }
 
 .update-badge-action:hover {
-  background: rgba(215, 25, 33, 0.28);
+  background: color-mix(in srgb, var(--glyph-accent) 28%, transparent);
 }
 
 .update-badge-dot {
@@ -329,7 +345,7 @@ body,
   height: 6px;
   border-radius: 50%;
   background: var(--nothing-red-bright);
-  box-shadow: 0 0 8px rgba(255, 48, 48, 0.85);
+  box-shadow: 0 0 8px var(--glyph-accent-glow);
   flex-shrink: 0;
 }
 
@@ -347,7 +363,7 @@ body,
 }
 
 .update-badge-dismiss:hover {
-  background: rgba(215, 25, 33, 0.28);
+  background: color-mix(in srgb, var(--glyph-accent) 28%, transparent);
   color: var(--glyph-fg);
 }
 
@@ -383,10 +399,10 @@ body,
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   font-family: var(--nothing-mono);
   line-height: 1;
-  transition: all 120ms ease;
+  transition: all var(--motion-fast);
 }
 
 .title-action svg,
@@ -415,9 +431,9 @@ body,
 }
 
 .window-control-danger:hover {
-  border-color: rgba(255, 48, 48, 0.5);
-  background: rgba(215, 25, 33, 0.28);
-  color: #ffffff;
+  border-color: var(--glyph-danger-line);
+  background: var(--glyph-danger-bg);
+  color: var(--glyph-fg);
 }
 
 .workspace {
@@ -472,7 +488,7 @@ body,
   width: 32px;
   height: 32px;
   border: 1px solid var(--glyph-line);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--glyph-surface-raised);
   color: var(--glyph-fg-muted);
   display: flex;
@@ -480,7 +496,7 @@ body,
   justify-content: center;
   cursor: pointer;
   margin-left: 2px;
-  transition: all 120ms ease;
+  transition: all var(--motion-fast);
 }
 
 .tabs-new svg {
@@ -505,7 +521,7 @@ body,
   grid-template-columns: minmax(0, 1fr) 26px;
   align-items: center;
   border: 1px solid var(--glyph-line);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--glyph-surface-raised);
   overflow: hidden;
   transition: opacity 120ms ease, border-color 120ms ease, background 120ms ease;
@@ -572,7 +588,7 @@ body,
   justify-content: center;
   cursor: pointer;
   padding: 0;
-  transition: all 120ms ease;
+  transition: all var(--motion-fast);
 }
 
 .terminal-tab-close:hover {
@@ -671,8 +687,8 @@ body,
 }
 
 .settings-panel::-webkit-scrollbar-thumb {
-  background: rgba(255, 48, 48, 0.5);
-  border-radius: 3px;
+  background: color-mix(in srgb, var(--glyph-accent) 50%, transparent);
+  border-radius: var(--radius-sm);
 }
 
 .settings-panel::-webkit-scrollbar-thumb:hover {
@@ -726,13 +742,13 @@ body,
 .settings-text-btn {
   background: transparent;
   border: 1px solid var(--glyph-line);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--glyph-fg-muted);
   font-family: var(--nothing-mono);
   font-size: 10px;
   padding: 3px 8px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all var(--motion-fast);
 }
 
 .settings-text-btn:hover {
@@ -744,7 +760,7 @@ body,
 .settings-close-btn {
   background: transparent;
   border: 1px solid var(--glyph-line);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   color: var(--glyph-fg-muted);
   width: 22px;
   height: 22px;
@@ -752,7 +768,7 @@ body,
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all var(--motion-fast);
   padding: 0;
 }
 
@@ -767,7 +783,7 @@ body,
 .settings-accordion-group {
   margin-bottom: 14px;
   border: 1px solid var(--glyph-line);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--glyph-surface);
   overflow: hidden;
   transition: border-color 140ms ease;
@@ -819,7 +835,7 @@ body,
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--glyph-accent-dim);
   color: var(--glyph-accent);
   flex-shrink: 0;
@@ -864,7 +880,7 @@ body,
   font-size: 10px;
   font-weight: 500;
   padding: 2px 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--glyph-surface);
   color: var(--glyph-fg-muted);
   border: 1px solid var(--glyph-line);
@@ -919,7 +935,7 @@ body,
   align-items: flex-start;
   gap: 10px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   background: var(--glyph-surface-raised);
   border: 1px solid var(--glyph-line);
   font-size: 11px;
@@ -1021,7 +1037,7 @@ body,
   display: block;
   padding: 10px;
   border: 1px solid var(--glyph-line);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   color: var(--glyph-fg);
   background: var(--glyph-surface-raised);
   font-size: 12px;
@@ -1034,7 +1050,7 @@ body,
   min-width: 72px;
   height: 30px;
   border-color: var(--glyph-line);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 0 12px;
   font-family: var(--nothing-mono);
   font-size: 12px;
@@ -1060,7 +1076,7 @@ body,
   justify-content: space-between;
   gap: 8px;
   border: 1px solid var(--glyph-line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--glyph-surface-raised);
   color: var(--glyph-fg);
   font-family: var(--nothing-mono);
@@ -1068,7 +1084,7 @@ body,
   padding: 0 10px;
   outline: none;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all var(--motion-fast);
   box-sizing: border-box;
 }
 
@@ -1100,7 +1116,7 @@ body,
   z-index: 999;
   background: var(--glyph-surface-raised) !important;
   border: 1px solid var(--glyph-line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   box-shadow: 0 12px 32px var(--glyph-shadow);
   padding: 4px;
   display: flex;
@@ -1123,7 +1139,7 @@ body,
   gap: 12px;
   padding: 6px 10px;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-md);
   background: transparent;
   color: var(--glyph-fg);
   font-family: var(--nothing-mono);
@@ -1153,14 +1169,14 @@ body,
   min-width: 52px;
   height: 28px;
   border: 1px solid var(--glyph-line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   background: var(--glyph-surface-raised);
   color: var(--glyph-fg-muted);
   font-family: var(--nothing-mono);
   font-size: 11px;
   padding: 0 10px;
   cursor: pointer;
-  transition: all 120ms ease;
+  transition: all var(--motion-fast);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1217,7 +1233,7 @@ body,
   width: 24px;
   height: 24px;
   border: 1px solid var(--glyph-line-strong);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   cursor: pointer;
   padding: 0;
@@ -1230,7 +1246,7 @@ body,
 
 .settings-color-input::-webkit-color-swatch {
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-sm);
 }
 
 .color-hex-label {
@@ -1400,7 +1416,7 @@ body,
   border: 1px solid var(--glyph-line);
   background: transparent;
   color: var(--glyph-fg-muted);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: var(--nothing-mono);
   font-size: 10px;
   padding: 2px 6px;
@@ -1458,7 +1474,7 @@ body,
   justify-content: center;
   padding: 3px 7px;
   border: 1px solid var(--glyph-line);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: var(--glyph-surface-raised);
   color: var(--glyph-fg);
   font-family: var(--nothing-mono);
@@ -1482,7 +1498,7 @@ body,
   border: 1px solid var(--glyph-line);
   background: var(--glyph-surface-raised);
   color: var(--glyph-fg-muted);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-family: var(--nothing-mono);
   font-size: 10px;
   padding: 3px 7px;
@@ -1523,7 +1539,7 @@ body,
   display: flex;
   flex-direction: column;
   border: 1px solid var(--glyph-line);
-  border-radius: 8px;
+  border-radius: var(--radius-lg);
   overflow: hidden;
   background: var(--glyph-surface-raised);
   cursor: pointer;
