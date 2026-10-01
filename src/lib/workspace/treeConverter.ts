@@ -23,7 +23,9 @@ export function splitNodeToWorkspaceLayout(
         id: paneId,
         name: title,
         cwd: cwd ?? undefined,
-        command: null,
+        // Carried through so re-saving a workspace opened from a saved one
+        // keeps each pane's command instead of silently blanking it.
+        command: node.pane.startupCommand ?? null,
       });
 
       return {

@@ -8,8 +8,9 @@
 # version that already shipped. Each release carries the script it will be
 # installed by.
 #
-# Invoked as: sudo -v && curl -fsSL .../self-update.sh | bash -s -- <tag>
-# e.g.        sudo -v && curl -fsSL .../v0.3.0/scripts/self-update.sh | bash -s -- v0.3.0
+# Invoked as: sudo -v && echo ... && curl -fsSL <timeouts> .../self-update.sh | bash -s -- <tag>
+# e.g.        sudo -v && echo ... && curl -fsSL --connect-timeout 20 --max-time 120 \
+#               .../v0.3.0/scripts/self-update.sh | bash -s -- v0.3.0
 # (`sudo -v` caches credentials up front so the .deb path's `sudo dpkg -i`
 # doesn't have to prompt mid-pipe; the script itself runs unprivileged.)
 set -euo pipefail
@@ -41,6 +42,8 @@ case "$(uname -m)" in
   *) fail "Unsupported architecture: $(uname -m)" ;;
 esac
 
+log "Updating Glyph to v${VERSION}…"
+
 RELEASE_BASE="https://github.com/${REPO}/releases/download/${TAG}"
 WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
@@ -59,6 +62,7 @@ download_and_verify() {
   # slow link, and without progress it looks stuck.
   curl "${CURL_OPTS[@]}" --progress-bar -o "$dest" "${RELEASE_BASE}/${asset}" \
     || fail "Download of ${asset} failed. Check your connection and try again."
+  log "Verifying ${asset}…"
   curl "${CURL_OPTS[@]}" --silent --show-error -o "$WORKDIR/checksums.txt" "${RELEASE_BASE}/checksums.txt" \
     || fail "Download of checksums.txt failed. Check your connection and try again."
 
