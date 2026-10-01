@@ -19,7 +19,12 @@ function collectPaneSessionIds(node: SplitNode, out: Map<string, string>) {
 }
 
 async function buildSessionTab(tab: TerminalTabModel): Promise<SessionTab> {
-  const { layout, panes } = splitNodeToWorkspaceLayout(tab.rootNode);
+  const converted = splitNodeToWorkspaceLayout(tab.rootNode);
+  const layout = converted.layout;
+  // Restoring the last session after a restart must not replay startup
+  // commands (a dev server, a deploy, a migration) the user never asked to
+  // run again — only explicitly opening a saved workspace does that.
+  const panes = converted.panes.map((pane) => ({ ...pane, command: null }));
   const sessionIds = new Map<string, string>();
   collectPaneSessionIds(tab.rootNode, sessionIds);
 

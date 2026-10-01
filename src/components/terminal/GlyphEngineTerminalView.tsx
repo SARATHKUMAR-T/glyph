@@ -137,7 +137,28 @@ function activeInputRange(lineText: string): { start: number; text: string } {
   return { start, text: trimmed.slice(start) };
 }
 
-const QUOTE_SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+/** A workspace pane's saved command, flattened to the single line typed at
+ * its shell prompt. Empty when there's nothing to run. */
+function formatStartupCommand(command: TerminalPaneModel["startupCommand"]): string {
+  if (!command) return "";
+  if (typeof command === "string") return command.trim();
+  return [command.program, ...(command.args ?? [])].join(" ").trim();
+}
+
+// Timing for typing a pane's startup command into a freshly spawned shell.
+// Bytes written before the shell is reading still sit in the PTY's input
+// queue, but they get echoed by the kernel and then redrawn by the shell's
+// line editor, so the command shows up twice and some rc files (plugin
+// managers, `read` prompts) can swallow it. Instead, wait until the shell
+// has printed something and then gone quiet — that's its first prompt —
+// with a floor so a fast shell still gets a moment, and a ceiling so a
+// shell that never prints (or keeps printing) still gets its command.
+const STARTUP_COMMAND_MIN_DELAY_MS = 300;
+const STARTUP_COMMAND_IDLE_MS = 150;
+const STARTUP_COMMAND_MAX_DELAY_MS = 5000;
+const STARTUP_COMMAND_POLL_MS = 50;
+
+const QUOTE_SPINNER_FRAMES =["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 /** The `quote` built-in: typing `quote` + Enter at a shell prompt shows a
  * short animated fetch, then a quote, without the shell ever seeing the
@@ -333,6 +354,7 @@ export function GlyphEngineTerminalView({
 
     let disposed = false;
     let resizeFrame = 0;
+    let startupCommandTimer = 0;
     const unlisteners: Array<() => void> = [];
     const fontSize = settings?.fontSize ?? 14;
     const { cellWidth, cellHeight } = measureCellMetrics(TERMINAL_FONT_FAMILY, fontSize, LINE_HEIGHT);
@@ -388,6 +410,10 @@ export function GlyphEngineTerminalView({
 
       try {
         let sessionId = pane.sessionId ?? null;
+        // Only a shell this view spawns gets the pane's startup command. A
+        // pane that already has a session is being remounted (e.g. a split
+        // reshaping the tree) and its command already ran in that shell.
+        let startupCommand = "";
         if (sessionId) {
           sessionIdRef.current = sessionId;
           onSessionStatus(pane.paneId, "running");
@@ -404,11 +430,14 @@ export function GlyphEngineTerminalView({
           sessionId = info.sessionId;
           sessionIdRef.current = sessionId;
           onSessionReady(pane.paneId, info);
+          startupCommand = formatStartupCommand(pane.startupCommand);
         }
 
         onSessionResize(pane.paneId, cols, rows);
 
+        let lastOutputAt = 0;
         const channel = new Channel<ArrayBuffer | Uint8Array>((data) => {
+          lastOutputAt = performance.now();
           try {
             rendererRef.current?.applyFrameBytes(data);
             updateScrollbarThumb();
@@ -418,6 +447,33 @@ export function GlyphEngineTerminalView({
         });
         await invoke("engine_attach_channel", { sessionId, channel });
         if (disposed) return;
+
+        if (startupCommand) {
+          const targetSessionId = sessionId;
+          const startedAt = performance.now();
+          const typeWhenPromptIsUp = () => {
+            if (disposed || sessionIdRef.current !== targetSessionId) return;
+            const now = performance.now();
+            const elapsed = now - startedAt;
+            // Attaching the channel always sends one full repaint, so a frame
+            // alone doesn't mean the shell printed anything; text on the
+            // cursor's row does.
+            const renderer = rendererRef.current;
+            const cursorRowHasText = renderer
+              ? renderer.getRowText(renderer.getCursorPosition().row).trim() !== ""
+              : false;
+            const promptIsUp =
+              cursorRowHasText && lastOutputAt > 0 && now - lastOutputAt >= STARTUP_COMMAND_IDLE_MS;
+            if ((promptIsUp && elapsed >= STARTUP_COMMAND_MIN_DELAY_MS) || elapsed >= STARTUP_COMMAND_MAX_DELAY_MS) {
+              void writeTerminalData(targetSessionId, `${startupCommand}\r`).catch((error: unknown) =>
+                console.error("[GlyphEngineTerminalView] startup command failed:", error),
+              );
+              return;
+            }
+            startupCommandTimer = window.setTimeout(typeWhenPromptIsUp, STARTUP_COMMAND_POLL_MS);
+          };
+          typeWhenPromptIsUp();
+        }
 
         // Tracks the in-flight command across its two boundary events so
         // `command_finished` can pair itself with the text/grid-line
@@ -541,6 +597,7 @@ export function GlyphEngineTerminalView({
     return () => {
       disposed = true;
       cancelAnimationFrame(resizeFrame);
+      window.clearTimeout(startupCommandTimer);
       resizeObserver.disconnect();
       host.removeEventListener("wheel", handleWheelNative);
       unlisteners.forEach((u) => u());

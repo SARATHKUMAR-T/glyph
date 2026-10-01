@@ -178,7 +178,7 @@ indistinguishable from the user typing it themselves:
 The command is:
 
 ```
-sudo -v && curl -fsSL https://raw.githubusercontent.com/SARATHKUMAR-T/glyph/v0.3.0/scripts/self-update.sh | bash -s -- v0.3.0
+sudo -v && echo "[glyph-update] Fetching the v0.3.0 installer..." && curl -fsSL --connect-timeout 20 --max-time 120 https://raw.githubusercontent.com/SARATHKUMAR-T/glyph/v0.3.0/scripts/self-update.sh | bash -s -- v0.3.0
 ```
 
 These details matter here:
@@ -190,6 +190,14 @@ These details matter here:
   AppImage path keeps `$APPIMAGE` and the downloaded script never runs
   entirely as root. (`sudo curl …` would elevate only the download, and
   `… | sudo bash` would run the whole remote script as root.)
+
+- **The script fetch says what it's doing and can't hang forever.** The
+  `echo` prints right after the password is accepted, and
+  `--connect-timeout`/`--max-time` turn a slow, filtered, or blocked
+  route to raw.githubusercontent.com into a visible curl error. Before
+  this, a stalled fetch looked like the update froze after the password.
+  There's deliberately no `--retry`: retrying after a partial transfer
+  would pipe a duplicated script body into bash.
 
 - **The script URL is pinned to the release tag being installed**, not
   `main`. `self-update.sh` is fetched from that tag's committed copy, so a

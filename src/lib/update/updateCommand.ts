@@ -14,8 +14,18 @@ import type { UpdateInfo } from "./types";
  * runs unprivileged, so the AppImage path keeps `$APPIMAGE`, and
  * `sudo curl`/`| sudo bash` are avoided on purpose (the first would give
  * root only to the download, the second would run the whole script as root).
+ *
+ * The script fetch itself prints nothing, so right after the password
+ * prompt a slow, filtered, or blocked route to raw.githubusercontent.com
+ * used to look like the update had silently frozen. The `echo` says what's
+ * happening, and the timeouts turn a stalled fetch into curl's own visible
+ * error instead of an indefinite hang. No `--retry`: a retry after a
+ * partial transfer would pipe a duplicated script body into bash.
  */
 export function buildUpdateCommand(update: UpdateInfo): string {
   const scriptUrl = `https://raw.githubusercontent.com/SARATHKUMAR-T/glyph/${update.tag}/scripts/self-update.sh`;
-  return `sudo -v && curl -fsSL ${scriptUrl} | bash -s -- ${update.tag}`;
+  return (
+    `sudo -v && echo "[glyph-update] Fetching the ${update.tag} installer..." && ` +
+    `curl -fsSL --connect-timeout 20 --max-time 120 ${scriptUrl} | bash -s -- ${update.tag}`
+  );
 }
