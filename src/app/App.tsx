@@ -22,12 +22,13 @@ import { useTerminalTheme } from "../hooks/useTerminalTheme";
 import { useCursorStyle } from "../hooks/useCursorStyle";
 import { useIsWindowMaximized } from "../hooks/useIsWindowMaximized";
 import { getTheme } from "../lib/terminal/themes";
-import { useKeybindings } from "../hooks/useKeybindings";
+import { formatKeyCombo, useKeybindings } from "../hooks/useKeybindings";
 import { useWorkspaces } from "../hooks/useWorkspaces";
 import { isTauriRuntime } from "../lib/terminal/events";
 import { getTerminalCwd, writeTerminalData } from "../hooks/useTerminalSession";
 import { useUpdateChecker } from "../hooks/useUpdateChecker";
 import { buildUpdateCommand } from "../lib/update/updateCommand";
+import { encodeKeyEvent, isTabKey } from "../lib/terminal/keyEncoding";
 import { workspaceLayoutToSplitNode } from "../lib/workspace/treeConverter";
 import type { Workspace } from "../lib/workspace/types";
 import {
@@ -51,6 +52,21 @@ import type {
   TerminalStatus,
   TerminalTabModel,
 } from "../lib/terminal/types";
+
+/** Where Tab keeps its normal focus-navigation meaning — everywhere else
+ * it's sent to the active terminal. See the Tab guard in `App`. */
+const TAB_NAVIGABLE_REGIONS =
+  ".glyph-canvas-input-sink, input, select, textarea, .settings-panel, .workspace-modal, .workspace-menu-dropdown, .terminal-search";
+
+function isTerminalInput(target: EventTarget | null): boolean {
+  return target instanceof Element && target.classList.contains("glyph-canvas-input-sink");
+}
+
+function focusPaneInput(paneId: string) {
+  document
+    .querySelector<HTMLTextAreaElement>(`[data-pane-target="${paneId}"] .glyph-canvas-input-sink`)
+    ?.focus();
+}
 
 function formatTabTitle(index: number): string {
   return `Terminal ${index}`;
@@ -124,19 +140,37 @@ export function App({ initialSession }: AppProps) {
     if (!activePane?.sessionId) return;
     void writeTerminalData(activePane.sessionId, "\x15" + buildUpdateCommand(availableUpdate));
     setSettingsOpen(false);
-    requestAnimationFrame(() => {
-      document
-        .querySelector<HTMLTextAreaElement>(
-          `[data-pane-target="${activePane.paneId}"] .glyph-canvas-input-sink`,
-        )
-        ?.focus();
-    });
+    requestAnimationFrame(() => focusPaneInput(activePane.paneId));
   }, [availableUpdate, activeTab]);
 
   const tabsRef = useRef(tabs);
   useEffect(() => {
     tabsRef.current = tabs;
   }, [tabs]);
+
+  // Tab / Shift+Tab are terminal keys, never focus navigation: agent CLIs
+  // (Claude Code's mode switch, Codex, Gemini) and shells all rely on them.
+  // If focus has ended up on window chrome — a tab, a titlebar or pane
+  // button — pull it back into the active pane and deliver the keystroke
+  // there, instead of letting the browser walk focus across the buttons.
+  // Forms that genuinely need Tab (Settings, workspace modals, the search
+  // box, menus) keep it.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !isTabKey(e) || e.ctrlKey || e.metaKey) return;
+      const target = e.target instanceof Element ? e.target : null;
+      if (target?.closest(TAB_NAVIGABLE_REGIONS)) return;
+      const tab = tabsRef.current.find((t) => t.clientId === activeTabId);
+      const pane = tab ? findPaneNode(tab.rootNode, tab.activePaneId) : null;
+      if (!pane) return;
+      e.preventDefault();
+      focusPaneInput(pane.paneId);
+      const encoded = encodeKeyEvent(e);
+      if (pane.sessionId && encoded) void writeTerminalData(pane.sessionId, encoded);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeTabId]);
 
   // Requested once, up front, rather than lazily the first time a command
   // finishes in a background tab — asking for OS notification permission
@@ -159,10 +193,13 @@ export function App({ initialSession }: AppProps) {
     }
   }, [isWindowMaximized, expandedPane]);
 
-  // Close the enlarged-pane modal with Escape.
+  // Close the enlarged-pane modal with Escape — but not while a terminal
+  // has focus: Escape belongs to the program running there (it's how you
+  // interrupt Claude Code / Codex, leave vim's insert mode, ...). From the
+  // terminal, the expand-pane shortcut restores the split instead.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && expandedPane) {
+      if (e.key === "Escape" && expandedPane && !isTerminalInput(e.target)) {
         setExpandedPane(null);
       }
     };
@@ -679,7 +716,7 @@ export function App({ initialSession }: AppProps) {
                   <button
                     type="button"
                     className="expanded-pane-btn"
-                    title="Restore to Split (Esc)"
+                    title={`Restore to Split (${formatKeyCombo(keybindings.expand_pane)})`}
                     onClick={() => setExpandedPane(null)}
                   >
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -693,7 +730,7 @@ export function App({ initialSession }: AppProps) {
                   <button
                     type="button"
                     className="expanded-pane-close"
-                    title="Close (Esc)"
+                    title={`Close (${formatKeyCombo(keybindings.expand_pane)})`}
                     onClick={() => setExpandedPane(null)}
                   >
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">

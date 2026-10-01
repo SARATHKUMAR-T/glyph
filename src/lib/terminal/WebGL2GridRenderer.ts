@@ -172,7 +172,7 @@ export class WebGL2GridRenderer implements GridRenderer {
 
   private displayOffset = 0;
   private historySize = 0;
-  private mouseMode: MouseMode = { tracking: MouseTrackingLevel.Off, sgr: false };
+  private mouseMode: MouseMode = { tracking: MouseTrackingLevel.Off, sgr: false, appCursor: false };
   private selection: SelectionRange | null = null;
 
   constructor(canvas: HTMLCanvasElement, opts: RendererOptions) {

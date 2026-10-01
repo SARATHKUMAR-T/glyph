@@ -552,9 +552,18 @@ export function GlyphEngineTerminalView({
     setMatchInfo(null);
   }, [searchOpen, isPaneActive]);
 
+  // Like every terminal, input snaps a scrolled-back view to the live
+  // bottom so the user sees what they're typing.
+  const snapToBottom = (sessionId: string) => {
+    if ((rendererRef.current?.getDisplayOffset() ?? 0) > 0) {
+      void invoke("engine_set_scroll", { sessionId, displayOffset: 0 }).catch(() => {});
+    }
+  };
+
   const sendBytes = (bytes: string) => {
     const sessionId = sessionIdRef.current;
     if (!sessionId) return;
+    snapToBottom(sessionId);
     void writeTerminalData(sessionId, bytes).catch((error: unknown) =>
       onSessionStatus(pane.paneId, "error", formatError(error)),
     );
@@ -563,6 +572,7 @@ export function GlyphEngineTerminalView({
   const pasteText = (text: string) => {
     const sessionId = sessionIdRef.current;
     if (!sessionId || !text) return;
+    snapToBottom(sessionId);
     void pasteTerminalData(sessionId, text).catch((error: unknown) =>
       onSessionStatus(pane.paneId, "error", formatError(error)),
     );
@@ -1028,6 +1038,34 @@ export function GlyphEngineTerminalView({
       return;
     }
 
+    // Standard Linux-terminal chords, Shift-only so they never shadow a
+    // program's own Ctrl/Alt bindings: Shift+Insert pastes, and
+    // Shift+PageUp/PageDown page through scrollback. In the alternate
+    // screen (vim, less, full-screen agent UIs) there is no scrollback, so
+    // the paging keys fall through to the program as usual.
+    const shiftOnly = event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey;
+    if (shiftOnly && event.key === "Insert") {
+      event.preventDefault();
+      void (async () => {
+        const text = isTauriRuntime() ? await clipboardReadText() : await navigator.clipboard?.readText();
+        if (text) pasteText(text);
+      })();
+      return;
+    }
+    if (shiftOnly && (event.key === "PageUp" || event.key === "PageDown")) {
+      const renderer = rendererRef.current;
+      const sessionId = sessionIdRef.current;
+      const history = renderer?.getHistorySize() ?? 0;
+      if (renderer && sessionId && history > 0) {
+        event.preventDefault();
+        const page = Math.max(1, lastSizeRef.current.rows - 1);
+        const delta = event.key === "PageUp" ? page : -page;
+        const offset = Math.min(history, Math.max(0, renderer.getDisplayOffset() + delta));
+        void invoke("engine_set_scroll", { sessionId, displayOffset: offset }).catch(() => {});
+        return;
+      }
+    }
+
     // The `quote` built-in — see `runQuoteEasterEgg`. Checked ahead of the
     // generic encoder below since plain Enter would otherwise just encode
     // to "\r" and go straight to the PTY.
@@ -1052,7 +1090,9 @@ export function GlyphEngineTerminalView({
       }
     }
 
-    const encoded = encodeKeyEvent(event.nativeEvent);
+    const encoded = encodeKeyEvent(event.nativeEvent, {
+      appCursor: rendererRef.current?.getMouseMode().appCursor,
+    });
     if (encoded !== null) {
       event.preventDefault();
       sendBytes(encoded);
@@ -1192,6 +1232,11 @@ export function GlyphEngineTerminalView({
     if (searchQuery) void runSearch("Next", searchQuery, next);
   };
 
+  // Pane header buttons act on mouse click (or their shortcuts) only: they
+  // stay out of the Tab order and never take focus from the terminal, so
+  // the keystrokes after a click keep going to the PTY.
+  const keepTerminalFocus = (event: React.MouseEvent) => event.preventDefault();
+
   const activeClass =
     active && isPaneActive
       ? "terminal-view is-active is-active-pane"
@@ -1221,6 +1266,8 @@ export function GlyphEngineTerminalView({
             <button
               type="button"
               className="pane-control-btn"
+              tabIndex={-1}
+              onMouseDown={keepTerminalFocus}
               title="Expand Pane (Full Window)"
               onClick={(e) => {
                 e.stopPropagation();
@@ -1238,6 +1285,8 @@ export function GlyphEngineTerminalView({
               <button
                 type="button"
                 className="pane-control-btn"
+                tabIndex={-1}
+                onMouseDown={keepTerminalFocus}
                 title="Split Right (Ctrl+Shift+D)"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1252,6 +1301,8 @@ export function GlyphEngineTerminalView({
               <button
                 type="button"
                 className="pane-control-btn"
+                tabIndex={-1}
+                onMouseDown={keepTerminalFocus}
                 title="Split Down (Ctrl+Shift+O)"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -1267,6 +1318,8 @@ export function GlyphEngineTerminalView({
                 <button
                   type="button"
                   className="pane-control-btn pane-control-close"
+                  tabIndex={-1}
+                  onMouseDown={keepTerminalFocus}
                   title="Close Pane (Ctrl+Shift+W)"
                   onClick={(e) => {
                     e.stopPropagation();

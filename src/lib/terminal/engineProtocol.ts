@@ -53,16 +53,21 @@ export const enum MouseTrackingLevel {
 }
 const MOUSE_TRACKING_MASK = 0b0000_0011;
 const MOUSE_SGR_BIT = 1 << 2;
+const APP_CURSOR_BIT = 1 << 3;
 
 export interface MouseMode {
   tracking: MouseTrackingLevel;
   sgr: boolean;
+  /** DECCKM — not a mouse setting, but carried in the same header byte;
+   * see `protocol::mouse_mode`. */
+  appCursor: boolean;
 }
 
 export function decodeMouseMode(byte: number): MouseMode {
   return {
     tracking: (byte & MOUSE_TRACKING_MASK) as MouseTrackingLevel,
     sgr: (byte & MOUSE_SGR_BIT) !== 0,
+    appCursor: (byte & APP_CURSOR_BIT) !== 0,
   };
 }
 

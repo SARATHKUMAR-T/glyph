@@ -757,7 +757,13 @@ fn wire_mouse_mode(mode: &TermMode) -> u8 {
         0
     };
 
-    tracking | sgr
+    let app_cursor = if mode.contains(TermMode::APP_CURSOR) {
+        mouse_mode::APP_CURSOR
+    } else {
+        0
+    };
+
+    tracking | sgr | app_cursor
 }
 
 fn map_flags(flags: Flags) -> u16 {
@@ -1066,6 +1072,21 @@ mod mouse_mode_tests {
         engine.build_frame();
 
         engine.feed(b"\x1b[?1002l");
+        let frame = engine.build_frame().expect("mode change forces a frame");
+        assert_eq!(header_mouse_mode(&frame), mouse_mode::TRACKING_OFF);
+    }
+
+    #[test]
+    fn reports_application_cursor_mode_toggles() {
+        let mut engine = GridEngine::new(20, 5, 100);
+        engine.build_frame();
+
+        // `?1h` (DECCKM), sent by vim, less and full-screen TUIs on startup.
+        engine.feed(b"\x1b[?1h");
+        let frame = engine.build_frame().expect("mode change forces a frame");
+        assert_eq!(header_mouse_mode(&frame), mouse_mode::APP_CURSOR);
+
+        engine.feed(b"\x1b[?1l");
         let frame = engine.build_frame().expect("mode change forces a frame");
         assert_eq!(header_mouse_mode(&frame), mouse_mode::TRACKING_OFF);
     }

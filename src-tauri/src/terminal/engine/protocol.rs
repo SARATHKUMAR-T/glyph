@@ -117,7 +117,13 @@
 //!                             Column/row are sent as decimal text, so this
 //!                             has no coordinate ceiling; prefer this
 //!                             encoding whenever it's set.
-//! bits 3-7  reserved
+//! bit  3    app_cursor       `?1` (DECCKM) is set: unmodified cursor keys
+//!                             must be sent as `SS3 A..D` instead of
+//!                             `CSI A..D`. Not a mouse bit, but the same
+//!                             kind of program-requested input mode the
+//!                             frontend's encoder needs, and it gets the
+//!                             same forced-frame-on-change treatment.
+//! bits 4-7  reserved
 //! ```
 //! `sgr` and the legacy `utf8` extended mode (`?1005`) are mutually
 //! exclusive in `alacritty_terminal`'s own mode bits (setting one clears
@@ -146,6 +152,7 @@ pub mod mouse_mode {
     pub const TRACKING_DRAG: u8 = 2;
     pub const TRACKING_ANY_MOTION: u8 = 3;
     pub const SGR: u8 = 1 << 2;
+    pub const APP_CURSOR: u8 = 1 << 3;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
