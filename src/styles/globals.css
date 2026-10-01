@@ -17,9 +17,9 @@
 select,
 option,
 optgroup {
-  color-scheme: dark;
-  background-color: #141419 !important;
-  color: #ffffff !important;
+  color-scheme: var(--glyph-color-scheme, dark);
+  background-color: var(--glyph-surface-raised, #141419) !important;
+  color: var(--glyph-fg, #ffffff) !important;
 }
 
 * {
@@ -50,4 +50,25 @@ button {
 
 code {
   font-family: var(--nothing-mono);
+}
+
+/* One focus treatment for the whole UI: a thin accent ring that only
+   appears for keyboard navigation (Settings, dialogs, menus), never on a
+   mouse click. Text fields show focus through their own border instead,
+   and the terminal surface never shows a ring — clicking empty space in a
+   pane must not draw a box around it. */
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 1px solid var(--glyph-accent);
+  outline-offset: 1px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+.terminal-view:focus-visible {
+  outline: none;
 }
