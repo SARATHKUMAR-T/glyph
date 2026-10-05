@@ -586,7 +586,9 @@ export function GlyphEngineTerminalView({
         return;
       }
 
-      const delta = Math.sign(e.deltaY) * WHEEL_LINES_PER_TICK;
+      // displayOffset counts lines back into history, so wheel-down (deltaY > 0)
+      // must shrink it to move toward newer output (standard, non-"natural" scroll).
+      const delta = -Math.sign(e.deltaY) * WHEEL_LINES_PER_TICK;
       const history = renderer.getHistorySize();
       const next = Math.max(0, Math.min(history, renderer.getDisplayOffset() + delta));
       if (next === renderer.getDisplayOffset()) return;
