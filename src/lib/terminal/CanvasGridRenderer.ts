@@ -1,3 +1,4 @@
+import { ThemeVarCache } from "./themeVars";
 import {
   ALL_UNDERLINE_FLAGS,
   cellText,
@@ -66,14 +67,17 @@ export class CanvasGridRenderer implements GridRenderer {
   private blinkTimer: ReturnType<typeof setInterval> | null = null;
   private blinkEnabled = false;
   private focused = true;
+  private visible = true;
 
   private displayOffset = 0;
   private historySize = 0;
   private mouseMode: MouseMode = { tracking: MouseTrackingLevel.Off, sgr: false, appCursor: false };
   private selection: SelectionRange | null = null;
+  private themeVars: ThemeVarCache;
 
   constructor(canvas: HTMLCanvasElement, opts: RendererOptions) {
     this.canvas = canvas;
+    this.themeVars = new ThemeVarCache(canvas);
     const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) throw new Error("2D canvas context unavailable");
     this.ctx = ctx;
@@ -188,6 +192,12 @@ export class CanvasGridRenderer implements GridRenderer {
     }
   }
 
+  setVisible(visible: boolean) {
+    if (this.visible === visible) return;
+    this.visible = visible;
+    if (visible) this.paintAll();
+  }
+
   setFocused(focused: boolean) {
     if (this.focused === focused) return;
     this.focused = focused;
@@ -266,7 +276,7 @@ export class CanvasGridRenderer implements GridRenderer {
   }
 
   private paintRow(row: number) {
-    if (row < 0 || row >= this.rows) return;
+    if (!this.visible || row < 0 || row >= this.rows) return;
     const { ctx, cellWidth, cellHeight, cols, baseline } = this;
     const y = row * cellHeight;
     const base = row * cols;
@@ -454,8 +464,7 @@ export class CanvasGridRenderer implements GridRenderer {
   }
 
   private themeColor(varName: string, fallback: string): string {
-    const value = getComputedStyle(this.canvas).getPropertyValue(varName).trim();
-    return value || fallback;
+    return this.themeVars.get(varName) || fallback;
   }
 
   private drawCursor() {

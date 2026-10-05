@@ -8,7 +8,7 @@ use crate::terminal::session::{
     TerminalSessionInfo,
 };
 
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn create_terminal(
     app: AppHandle,
     manager: State<'_, TerminalManager>,
@@ -17,7 +17,7 @@ pub fn create_terminal(
     manager.create_terminal(app, request).map_err(Into::into)
 }
 
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn write_terminal(
     manager: State<'_, TerminalManager>,
     session_id: String,
@@ -30,7 +30,7 @@ pub fn write_terminal(
 
 /// Writes clipboard text to the PTY as a single paste, bracketed when the
 /// running program asked for it — see `terminal::paste::encode_paste`.
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn paste_terminal(
     manager: State<'_, TerminalManager>,
     engine: State<'_, EngineManager>,
@@ -43,7 +43,7 @@ pub fn paste_terminal(
         .map_err(Into::into)
 }
 
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn resize_terminal(
     app: AppHandle,
     manager: State<'_, TerminalManager>,
@@ -55,7 +55,7 @@ pub fn resize_terminal(
         .map_err(Into::into)
 }
 
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn close_terminal(
     app: AppHandle,
     manager: State<'_, TerminalManager>,
@@ -66,14 +66,14 @@ pub fn close_terminal(
         .map_err(Into::into)
 }
 
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn list_sessions(
     manager: State<'_, TerminalManager>,
 ) -> Result<Vec<TerminalSessionInfo>, TerminalErrorPayload> {
     manager.list_sessions().map_err(Into::into)
 }
 
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn get_terminal_cwd(
     manager: State<'_, TerminalManager>,
     session_id: String,
@@ -81,7 +81,7 @@ pub fn get_terminal_cwd(
     manager.get_terminal_cwd(&session_id).map_err(Into::into)
 }
 
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn open_url(url: String) -> Result<(), String> {
     open::that(&url).map_err(|e| e.to_string())
 }

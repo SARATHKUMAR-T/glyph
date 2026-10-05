@@ -28,6 +28,7 @@ export function WindowControls() {
         aria-label="Minimize Window"
         className="window-control"
         title="Minimize Window"
+        tabIndex={-1}
         type="button"
         onClick={() => void runWindowAction("minimize")}
       >
@@ -39,6 +40,7 @@ export function WindowControls() {
         aria-label="Maximize or Restore Window"
         className="window-control"
         title="Maximize or Restore Window"
+        tabIndex={-1}
         type="button"
         onClick={() => void runWindowAction("toggleMaximize")}
       >
@@ -50,6 +52,7 @@ export function WindowControls() {
         aria-label="Close Window (Ctrl+Shift+W)"
         className="window-control window-control-danger"
         title="Close Window (Ctrl+Shift+W)"
+        tabIndex={-1}
         type="button"
         onClick={() => void runWindowAction("close")}
       >

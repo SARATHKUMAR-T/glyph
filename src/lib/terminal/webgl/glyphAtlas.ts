@@ -23,7 +23,10 @@ export interface AtlasRect {
   cellSpan: 1 | 2;
 }
 
-const ATLAS_SIZE = 2048;
+// 1024x1024 RGBA is 4 MiB of GPU memory per pane (2048 was 16 MiB, multiplied by
+// every pane of a workspace) and still holds thousands of cell-sized glyphs. If
+// it ever fills, it is wiped and re-populated on demand (see `reset`).
+const ATLAS_SIZE = 1024;
 
 export class GlyphAtlas {
   readonly texture: WebGLTexture;
@@ -39,7 +42,9 @@ export class GlyphAtlas {
   private cursorX = 0;
   private cursorY = 0;
   private rowHeight = 0;
-  private full = false;
+  /** Bumped every time the atlas is wiped; rects handed out earlier are then
+   * stale, so the renderer repaints when it changes mid-frame. */
+  generation = 0;
 
   constructor(
     gl: WebGL2RenderingContext,
@@ -101,11 +106,13 @@ export class GlyphAtlas {
       this.rowHeight = 0;
     }
     if (this.cursorY + slotHeight > ATLAS_SIZE) {
-      if (!this.full) {
-        console.warn("[GlyphAtlas] atlas full — further glyphs will not be drawn");
-        this.full = true;
-      }
-      return null;
+      // Full: drop everything and start over; glyphs still on screen are
+      // re-rasterized by the repaint the renderer schedules.
+      this.cache.clear();
+      this.cursorX = 0;
+      this.cursorY = 0;
+      this.rowHeight = 0;
+      this.generation++;
     }
 
     // Resizing the canvas clears it and resets 2D context state, which is

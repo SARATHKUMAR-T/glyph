@@ -58,10 +58,6 @@ import type {
 const TAB_NAVIGABLE_REGIONS =
   ".glyph-canvas-input-sink, input, select, textarea, .settings-panel, .workspace-modal, .workspace-menu-dropdown, .terminal-search";
 
-function isTerminalInput(target: EventTarget | null): boolean {
-  return target instanceof Element && target.classList.contains("glyph-canvas-input-sink");
-}
-
 function focusPaneInput(paneId: string) {
   document
     .querySelector<HTMLTextAreaElement>(`[data-pane-target="${paneId}"] .glyph-canvas-input-sink`)
@@ -193,19 +189,38 @@ export function App({ initialSession }: AppProps) {
     }
   }, [isWindowMaximized, expandedPane]);
 
-  // Close the enlarged-pane modal with Escape — but not while a terminal
-  // has focus: Escape belongs to the program running there (it's how you
-  // interrupt Claude Code / Codex, leave vim's insert mode, ...). From the
-  // terminal, the expand-pane shortcut restores the split instead.
+  // Escape closes the enlarged-pane modal, including while its terminal has
+  // focus (the modal auto-focuses it, so otherwise Escape would never work).
+  // Capture phase + stopPropagation keeps that Escape from also reaching the
+  // shell. The search box keeps its own Escape (it closes search first).
   useEffect(() => {
+    if (!expandedPane) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && expandedPane && !isTerminalInput(e.target)) {
-        setExpandedPane(null);
-      }
+      if (e.key !== "Escape" || e.defaultPrevented) return;
+      const target = e.target instanceof Element ? e.target : null;
+      if (target?.closest(".terminal-search, .settings-panel, .workspace-modal, select, input")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setExpandedPane(null);
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [expandedPane]);
+
+  // Clicking window chrome (title-bar, tab and pane buttons) must not pull
+  // focus onto the button: no focus ring, and Enter/Space/Tab keep going to
+  // the terminal. Clicks still fire; only the focus transfer is cancelled.
+  // Buttons inside forms/menus/modals keep normal focus behaviour.
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target instanceof Element ? e.target : null;
+      const button = target?.closest("button");
+      if (!button || button.closest(TAB_NAVIGABLE_REGIONS)) return;
+      e.preventDefault();
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    return () => document.removeEventListener("mousedown", onMouseDown);
+  }, []);
 
   // Expands the given pane, or restores the split if one is already
   // enlarged. Expanding is only offered for a split tab in a maximized
@@ -460,30 +475,26 @@ export function App({ initialSession }: AppProps) {
     );
   }, []);
 
-  const handleSessionResize = useCallback((paneId: string, cols: number, rows: number) => {
-    setTabs((current) =>
-      current.map((tab) => {
-        const pane = findPaneNode(tab.rootNode, paneId);
-        if (!pane) return tab;
-        return {
-          ...tab,
-          rootNode: updatePaneInTree(tab.rootNode, paneId, { cols, rows }),
-        };
-      }),
-    );
-  }, []);
+  // Pane dimensions are not rendered anywhere (the engine owns the real
+  // size), so a resize must not touch React state: doing so re-rendered every
+  // pane of every tab on each window-drag step and for each pane at launch.
+  const handleSessionResize = useCallback((_paneId: string, _cols: number, _rows: number) => {}, []);
 
   const handleSessionStatus = useCallback((paneId: string, status: TerminalStatus, error?: string) => {
-    setTabs((current) =>
-      current.map((tab) => {
+    setTabs((current) => {
+      // Bail out (same array identity => no re-render) when nothing changed.
+      let changed = false;
+      const next = current.map((tab) => {
         const pane = findPaneNode(tab.rootNode, paneId);
-        if (!pane) return tab;
+        if (!pane || (pane.status === status && pane.error === error)) return tab;
+        changed = true;
         return {
           ...tab,
           rootNode: updatePaneInTree(tab.rootNode, paneId, { status, error }),
         };
-      }),
-    );
+      });
+      return changed ? next : current;
+    });
   }, []);
 
   const handleSemanticEvent = useCallback(

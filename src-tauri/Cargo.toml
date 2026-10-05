@@ -1,6 +1,6 @@
 [package]
 name = "glyph-terminal"
-version = "0.3.3"
+version = "0.5.0"
 description = "A Nothing-inspired Linux terminal emulator."
 authors = ["Sarath"]
 edition = "2021"
@@ -35,3 +35,15 @@ sysinfo = "0.36.1"
 # path (see src/terminal/engine), the terminal's sole rendering pipeline.
 alacritty_terminal = "0.26.0"
 
+
+# The VT parser and grid (alacritty_terminal) sit on the output hot path; an
+# unoptimized `tauri dev` build of them is an order of magnitude slower than
+# release, which makes dev builds feel laggy for no real reason.
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+strip = true

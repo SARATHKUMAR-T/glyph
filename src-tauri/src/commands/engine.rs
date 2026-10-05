@@ -8,7 +8,7 @@ use crate::terminal::engine::EngineManager;
 
 /// Start streaming binary damage frames (see `terminal::engine::protocol`)
 /// for `session_id` over `channel`.
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn engine_attach_channel(
     manager: State<'_, EngineManager>,
     session_id: String,
@@ -23,7 +23,7 @@ pub fn engine_attach_channel(
 /// produced (e.g. the `quote` built-in's spinner/output;
 /// `GlyphEngineTerminalView` clears the shell's real input line separately
 /// via `write_terminal` so the two don't collide).
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn engine_feed_local(manager: State<'_, EngineManager>, session_id: String, data: String) {
     manager.feed(&session_id, data.as_bytes());
 }
@@ -32,7 +32,7 @@ pub fn engine_feed_local(manager: State<'_, EngineManager>, session_id: String, 
 /// as the default for sessions created afterward) — see
 /// `EngineManager::set_palette`. Called whenever the frontend's active
 /// theme changes.
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn engine_set_palette(manager: State<'_, EngineManager>, palette: ThemePalette) {
     manager.set_palette(palette);
 }
@@ -41,7 +41,7 @@ pub fn engine_set_palette(manager: State<'_, EngineManager>, palette: ThemePalet
 /// every open terminal session (and stores it as the default for sessions
 /// created afterward) — see `EngineManager::set_cursor_style`. Called
 /// whenever the frontend's `cursorStyle` setting changes.
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn engine_set_cursor_style(manager: State<'_, EngineManager>, style: CursorStyleOption) {
     manager.set_cursor_style(style);
 }
@@ -56,7 +56,7 @@ pub struct ScrollbackInfoPayload {
     pub viewport_cols: usize,
 }
 
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn engine_scrollback_query(
     manager: State<'_, EngineManager>,
     session_id: String,
@@ -72,7 +72,7 @@ pub fn engine_scrollback_query(
         })
 }
 
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn engine_set_scroll(
     manager: State<'_, EngineManager>,
     session_id: String,
@@ -88,7 +88,7 @@ pub struct SelectionPoint {
     pub column: usize,
 }
 
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn engine_selection_range(
     manager: State<'_, EngineManager>,
     session_id: String,
@@ -104,7 +104,7 @@ pub fn engine_selection_range(
     )
 }
 
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn engine_clear_selection(manager: State<'_, EngineManager>, session_id: String) {
     manager.clear_selection(&session_id);
 }
@@ -116,7 +116,7 @@ pub fn engine_clear_selection(manager: State<'_, EngineManager>, session_id: Str
 /// literal text (see `GridEngine::search_with_mode`); an invalid pattern in
 /// that mode surfaces as an `Err` the frontend shows inline rather than a
 /// silent "no match".
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn engine_search(
     manager: State<'_, EngineManager>,
     session_id: String,

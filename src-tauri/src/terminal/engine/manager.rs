@@ -1,23 +1,59 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use tauri::ipc::{Channel, InvokeResponseBody};
 
 use super::grid_engine::{CursorStyleOption, GridEngine, ScrollbackInfo, SearchDirection, SearchMatch};
 use super::palette::{self, ThemePalette};
 
-/// How often the flush thread checks the grid for damage and, if any is
-/// found, sends a frame over the channel. ~4ms matches a 240Hz budget,
-/// comfortably under a 60Hz frame (16.6ms) so batching stays invisible.
-const FLUSH_INTERVAL: Duration = Duration::from_millis(4);
+/// Minimum spacing between two frames sent for one session. The flush
+/// thread sleeps until the engine reports damage (no idle polling), sends
+/// the first frame after a quiet period immediately — so a keystroke's echo
+/// is never delayed — and then coalesces whatever arrives within this window
+/// into one frame. Heavy output (`cat bigfile`, build logs) therefore costs
+/// at most ~60 frames/s of IPC + decode + paint instead of hundreds, which
+/// is what kept the webview's main thread saturated.
+const MIN_FRAME_INTERVAL: Duration = Duration::from_millis(16);
+
+/// How long an idle flush thread sleeps before re-checking its stop flags.
+/// Purely a safety net: `remove_session` and channel replacement also wake
+/// the thread explicitly.
+const IDLE_RECHECK: Duration = Duration::from_millis(500);
 
 const DEFAULT_SCROLLBACK: usize = 10_000;
 
+/// Wakes a session's flush thread. `pending` is set whenever something that
+/// can change the next frame happened (PTY output, resize, scroll, palette
+/// change, a new channel needing a full repaint).
+#[derive(Default)]
+struct Wake {
+    pending: Mutex<bool>,
+    condvar: Condvar,
+}
+
+impl Wake {
+    fn notify(&self) {
+        if let Ok(mut pending) = self.pending.lock() {
+            *pending = true;
+        }
+        self.condvar.notify_all();
+    }
+}
+
+/// Everything a command needs to touch one session without holding the
+/// session-map lock.
+#[derive(Clone)]
+struct SessionHandle {
+    engine: Arc<Mutex<GridEngine>>,
+    wake: Arc<Wake>,
+}
+
 struct EngineSession {
     engine: Arc<Mutex<GridEngine>>,
+    wake: Arc<Wake>,
     stop_flush: Arc<AtomicBool>,
     /// Stop flag of the flush thread serving the currently attached
     /// channel. Replaced on every `attach_channel` so only one flush thread
@@ -61,6 +97,7 @@ impl EngineManager {
         let engine = Arc::new(Mutex::new(grid_engine));
         let session = EngineSession {
             engine,
+            wake: Arc::new(Wake::default()),
             stop_flush: Arc::new(AtomicBool::new(false)),
             stop_channel: Arc::new(AtomicBool::new(false)),
         };
@@ -69,6 +106,7 @@ impl EngineManager {
             if let Some(old) = sessions.insert(session_id, session) {
                 old.stop_flush.store(true, Ordering::SeqCst);
                 old.stop_channel.store(true, Ordering::SeqCst);
+                old.wake.notify();
             }
         }
     }
@@ -84,6 +122,7 @@ impl EngineManager {
                 if let Ok(mut engine) = session.engine.lock() {
                     engine.set_palette(&palette);
                 }
+                session.wake.notify();
             }
         }
     }
@@ -100,6 +139,7 @@ impl EngineManager {
                 if let Ok(mut engine) = session.engine.lock() {
                     engine.set_cursor_style(style);
                 }
+                session.wake.notify();
             }
         }
     }
@@ -109,32 +149,35 @@ impl EngineManager {
             if let Some(session) = sessions.remove(session_id) {
                 session.stop_flush.store(true, Ordering::SeqCst);
                 session.stop_channel.store(true, Ordering::SeqCst);
+                session.wake.notify();
             }
         }
     }
 
     pub fn feed(&self, session_id: &str, bytes: &[u8]) {
-        let engine = self.engine_handle(session_id);
-        if let Some(engine) = engine {
-            if let Ok(mut engine) = engine.lock() {
+        if let Some(handle) = self.session_handle(session_id) {
+            if let Ok(mut engine) = handle.engine.lock() {
                 engine.feed(bytes);
             }
+            handle.wake.notify();
         }
     }
 
     pub fn resize(&self, session_id: &str, cols: u16, rows: u16) {
-        if let Some(engine) = self.engine_handle(session_id) {
-            if let Ok(mut engine) = engine.lock() {
+        if let Some(handle) = self.session_handle(session_id) {
+            if let Ok(mut engine) = handle.engine.lock() {
                 engine.resize(cols, rows);
             }
+            handle.wake.notify();
         }
     }
 
     pub fn set_scroll_display_offset(&self, session_id: &str, display_offset: usize) {
-        if let Some(engine) = self.engine_handle(session_id) {
-            if let Ok(mut engine) = engine.lock() {
+        if let Some(handle) = self.session_handle(session_id) {
+            if let Ok(mut engine) = handle.engine.lock() {
                 engine.set_scroll_display_offset(display_offset);
             }
+            handle.wake.notify();
         }
     }
 
@@ -165,10 +208,11 @@ impl EngineManager {
     }
 
     pub fn clear_selection(&self, session_id: &str) {
-        if let Some(engine) = self.engine_handle(session_id) {
-            if let Ok(mut engine) = engine.lock() {
+        if let Some(handle) = self.session_handle(session_id) {
+            if let Ok(mut engine) = handle.engine.lock() {
                 engine.clear_selection();
             }
+            handle.wake.notify();
         }
     }
 
@@ -181,19 +225,29 @@ impl EngineManager {
         from_col: usize,
         use_regex: bool,
     ) -> Result<Option<SearchMatch>, String> {
-        let Some(engine) = self.engine_handle(session_id) else {
+        let Some(handle) = self.session_handle(session_id) else {
             return Ok(None);
         };
-        let mut engine = engine.lock().map_err(|_| "engine lock poisoned".to_string())?;
-        engine.search_with_mode(pattern, direction, from_row, from_col, use_regex)
+        let result = {
+            let mut engine = handle
+                .engine
+                .lock()
+                .map_err(|_| "engine lock poisoned".to_string())?;
+            engine.search_with_mode(pattern, direction, from_row, from_col, use_regex)
+        };
+        // A hit scrolls the match into view, which damages the grid.
+        handle.wake.notify();
+        result
     }
 
     /// Start streaming damage frames for `session_id` over `channel` at the
     /// flush cadence. Only one flush thread runs per session; calling this
     /// again for the same session replaces the previous channel.
     pub fn attach_channel(&self, session_id: String, channel: Channel) {
-        let (engine, stop_flush, stop_channel) = {
-            let mut sessions = self.sessions.lock().unwrap();
+        let (engine, wake, stop_flush, stop_channel) = {
+            let Ok(mut sessions) = self.sessions.lock() else {
+                return;
+            };
             let Some(session) = sessions.get_mut(&session_id) else {
                 return;
             };
@@ -201,9 +255,15 @@ impl EngineManager {
             // would keep consuming the engine's damage and sending it to a
             // renderer that no longer exists, starving the new one.
             session.stop_channel.store(true, Ordering::SeqCst);
+            session.wake.notify();
             let stop_channel = Arc::new(AtomicBool::new(false));
             session.stop_channel = Arc::clone(&stop_channel);
-            (Arc::clone(&session.engine), Arc::clone(&session.stop_flush), stop_channel)
+            (
+                Arc::clone(&session.engine),
+                Arc::clone(&session.wake),
+                Arc::clone(&session.stop_flush),
+                stop_channel,
+            )
         };
 
         // The new channel's renderer starts blank, so its first frame must
@@ -212,37 +272,71 @@ impl EngineManager {
         if let Ok(mut engine) = engine.lock() {
             engine.request_full_frame();
         }
+        wake.notify();
 
         let stopped = move || stop_flush.load(Ordering::SeqCst) || stop_channel.load(Ordering::SeqCst);
 
-        thread::spawn(move || loop {
-            if stopped() {
-                break;
-            }
-            thread::sleep(FLUSH_INTERVAL);
-            if stopped() {
-                break;
-            }
-
-            let frame = {
-                let Ok(mut engine) = engine.lock() else {
-                    break;
-                };
-                // Re-checked under the lock: a thread retired while waiting
-                // on it must not consume the full frame requested for its
-                // replacement.
+        thread::spawn(move || {
+            let mut last_sent: Option<Instant> = None;
+            loop {
+                // Sleep until something may have changed. No polling: an idle
+                // terminal costs zero wakeups here.
+                {
+                    let Ok(mut pending) = wake.pending.lock() else {
+                        break;
+                    };
+                    while !*pending && !stopped() {
+                        match wake.condvar.wait_timeout(pending, IDLE_RECHECK) {
+                            Ok((guard, _)) => pending = guard,
+                            Err(_) => return,
+                        }
+                    }
+                    *pending = false;
+                }
                 if stopped() {
                     break;
                 }
-                engine.build_frame()
-            };
 
-            if let Some(frame) = frame {
-                if channel.send(InvokeResponseBody::Raw(frame)).is_err() {
-                    break;
+                // Coalesce: if a frame went out very recently, let more output
+                // accumulate before building the next one.
+                if let Some(sent) = last_sent {
+                    let elapsed = sent.elapsed();
+                    if elapsed < MIN_FRAME_INTERVAL {
+                        thread::sleep(MIN_FRAME_INTERVAL - elapsed);
+                        if stopped() {
+                            break;
+                        }
+                    }
+                }
+
+                let frame = {
+                    let Ok(mut engine) = engine.lock() else {
+                        break;
+                    };
+                    // Re-checked under the lock: a thread retired while waiting
+                    // on it must not consume the full frame requested for its
+                    // replacement.
+                    if stopped() {
+                        break;
+                    }
+                    engine.build_frame()
+                };
+
+                if let Some(frame) = frame {
+                    last_sent = Some(Instant::now());
+                    if channel.send(InvokeResponseBody::Raw(frame)).is_err() {
+                        break;
+                    }
                 }
             }
         });
+    }
+
+    fn session_handle(&self, session_id: &str) -> Option<SessionHandle> {
+        self.sessions.lock().ok()?.get(session_id).map(|session| SessionHandle {
+            engine: Arc::clone(&session.engine),
+            wake: Arc::clone(&session.wake),
+        })
     }
 
     fn engine_handle(&self, session_id: &str) -> Option<Arc<Mutex<GridEngine>>> {

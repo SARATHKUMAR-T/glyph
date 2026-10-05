@@ -76,6 +76,10 @@ const HEADER_LEN = 25;
 const ROW_HEADER_LEN = 8;
 const CELL_RECORD_LEN = 16;
 
+/** Shared by every cell without combining marks (nearly all of them), so
+ * decoding a frame doesn't allocate an array per cell. Never mutated. */
+const NO_EXTRA: number[] = [];
+
 export interface DecodedCell {
   codepoint: number;
   fg: number; // packed 0xRRGGBBAA
@@ -146,29 +150,34 @@ export function decodeFrame(data: ArrayBuffer | Uint8Array): DecodedFrame {
 
     const cellCount = endCol - startCol + 1;
     const cells: DecodedCell[] = new Array(cellCount);
-    const extraCounts: number[] = new Array(cellCount);
+    let anyExtra = false;
 
     for (let i = 0; i < cellCount; i++) {
       const cellOffset = offset + i * CELL_RECORD_LEN;
-      const codepoint = view.getUint32(cellOffset, true);
-      const fg = view.getUint32(cellOffset + 4, true);
-      const bg = view.getUint32(cellOffset + 8, true);
-      const flags = view.getUint16(cellOffset + 12, true);
-      const extraLen = view.getUint16(cellOffset + 14, true);
-      extraCounts[i] = extraLen;
-      cells[i] = { codepoint, fg, bg, flags, extra: [] };
+      if (view.getUint16(cellOffset + 14, true) !== 0) anyExtra = true;
+      cells[i] = {
+        codepoint: view.getUint32(cellOffset, true),
+        fg: view.getUint32(cellOffset + 4, true),
+        bg: view.getUint32(cellOffset + 8, true),
+        flags: view.getUint16(cellOffset + 12, true),
+        extra: NO_EXTRA,
+      };
     }
+    const recordsStart = offset;
     offset += cellCount * CELL_RECORD_LEN;
 
-    for (let i = 0; i < cellCount; i++) {
-      const count = extraCounts[i];
-      if (count === 0) continue;
-      const extra: number[] = new Array(count);
-      for (let j = 0; j < count; j++) {
-        extra[j] = view.getUint32(offset, true);
-        offset += 4;
+    // Combining-mark trailers follow all of a row's fixed-size records.
+    if (anyExtra) {
+      for (let i = 0; i < cellCount; i++) {
+        const count = view.getUint16(recordsStart + i * CELL_RECORD_LEN + 14, true);
+        if (count === 0) continue;
+        const extra: number[] = new Array(count);
+        for (let j = 0; j < count; j++) {
+          extra[j] = view.getUint32(offset, true);
+          offset += 4;
+        }
+        cells[i].extra = extra;
       }
-      cells[i].extra = extra;
     }
 
     rowRecords.push({ row, startCol, cells });
@@ -200,8 +209,14 @@ export function packedColorToCss(packed: number): string {
 
 /** Reassembles a cell's display string from its base codepoint plus any
  * combining/zero-width codepoints in its trailer. */
+const ASCII_TEXT: string[] = Array.from({ length: 128 }, (_, cp) => String.fromCodePoint(cp || 0x20));
+
 export function cellText(cell: DecodedCell): string {
-  if (cell.codepoint === 0 && cell.extra.length === 0) return "";
+  if (cell.extra.length === 0) {
+    if (cell.codepoint < 128) return cell.codepoint === 0 ? "" : ASCII_TEXT[cell.codepoint];
+  } else if (cell.codepoint === 0 && cell.extra.length === 0) {
+    return "";
+  }
   let text = String.fromCodePoint(cell.codepoint || 0x20);
   for (const cp of cell.extra) {
     text += String.fromCodePoint(cp);
