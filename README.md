@@ -17,6 +17,24 @@ cursors to remappable shortcuts and split panes.
 
 ------------------------------------------------------------------------
 
+## 🆕 What's New in v0.5.0
+
+**Performance**
+
+-   Terminal commands no longer run on the UI thread, so opening workspaces and typing stay responsive
+-   Output is delivered only when something changes, at most one frame per 16ms
+-   Rewritten dot-matrix background: static grid drawn once, animated styles at 30fps and paused when hidden
+-   Renderer repaints on demand, skips hidden tabs, reuses buffers and uses a smaller glyph atlas
+-   Panes no longer all re-render on every resize or status update
+-   Faster startup and LTO-optimized release builds
+
+**Fixes**
+
+-   Esc closes an enlarged pane again, even while its terminal has focus
+-   Window buttons (minimize, maximize, close) no longer take focus or show a focus ring
+
+------------------------------------------------------------------------
+
 ## ✨ Features
 
 ### 🎨 Three UI Styles
