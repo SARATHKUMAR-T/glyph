@@ -46,6 +46,10 @@ export interface GridRenderer {
    * focused pane's solid block/bar/underline, so a split never reads as
    * having two "active" cursors at once. */
   setFocused(focused: boolean): void;
+  /** Whether the pane is on screen at all (its tab is the active one). A
+   * hidden renderer keeps applying frames to its grid mirror but skips
+   * painting, then repaints in full when shown again. */
+  setVisible(visible: boolean): void;
   getCellMetrics(): { cellWidth: number; cellHeight: number };
   /** Scrollback offset from the most recently applied frame (0 = live
    * bottom), for converting mouse/search coordinates to/from absolute

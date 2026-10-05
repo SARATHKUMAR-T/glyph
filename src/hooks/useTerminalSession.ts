@@ -14,6 +14,64 @@ type ResizeTerminalRequest = {
   rows: number;
 };
 
+// Backend commands run on a thread pool, so two invokes issued back to back
+// are not guaranteed to execute in order. Keystrokes, pastes and resizes for
+// one session must land in the order they were issued ("ab" must not become
+// "ba"), so they are chained per session.
+const orderedChains = new Map<string, Promise<unknown>>();
+
+function ordered<T>(sessionId: string, run: () => Promise<T>): Promise<T> {
+  const previous = orderedChains.get(sessionId) ?? Promise.resolve();
+  const result = previous.then(run, run);
+  const tail = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  orderedChains.set(sessionId, tail);
+  void tail.then(() => {
+    if (orderedChains.get(sessionId) === tail) orderedChains.delete(sessionId);
+  });
+  return result;
+}
+
+// Scrollback offsets are "latest wins", so while one `engine_set_scroll` is in
+// flight newer requests collapse into a single follow-up carrying the most
+// recent offset instead of queueing one IPC per wheel tick.
+const scrollState = new Map<string, { inFlight: boolean; next: number | null }>();
+
+export function setEngineScroll(sessionId: string, displayOffset: number): void {
+  if (!isTauriRuntime()) return;
+  const state = scrollState.get(sessionId) ?? { inFlight: false, next: null };
+  scrollState.set(sessionId, state);
+  if (state.inFlight) {
+    state.next = displayOffset;
+    return;
+  }
+  const send = (offset: number) => {
+    state.inFlight = true;
+    void invoke("engine_set_scroll", { sessionId, displayOffset: offset })
+      .catch(() => {})
+      .then(() => {
+        if (state.next !== null) {
+          const queued = state.next;
+          state.next = null;
+          send(queued);
+        } else {
+          state.inFlight = false;
+          scrollState.delete(sessionId);
+        }
+      });
+  };
+  send(displayOffset);
+}
+
+/** Paints text into the session's grid without involving the shell. Shares
+ * the per-session ordering chain with PTY writes, so local output and the
+ * real writes that follow it keep the order they were issued in. */
+export function feedEngineLocal(sessionId: string, data: string): void {
+  void ordered(sessionId, () => invoke("engine_feed_local", { sessionId, data })).catch(() => {});
+}
+
 export async function createTerminalSession(request: CreateTerminalRequest) {
   ensureTauriRuntime();
   return invoke<TerminalSessionInfo>("create_terminal", { request });
@@ -21,7 +79,7 @@ export async function createTerminalSession(request: CreateTerminalRequest) {
 
 export async function writeTerminalData(sessionId: string, data: string) {
   ensureTauriRuntime();
-  return invoke<void>("write_terminal", { sessionId, data }).catch((err: unknown) => {
+  return ordered(sessionId, () => invoke<void>("write_terminal", { sessionId, data })).catch((err: unknown) => {
     console.error("[write_terminal] IPC error:", err, "sessionId:", sessionId);
     throw err;
   });
@@ -31,7 +89,7 @@ export async function writeTerminalData(sessionId: string, data: string) {
  * markers when the running program has enabled them (`?2004`). */
 export async function pasteTerminalData(sessionId: string, data: string) {
   ensureTauriRuntime();
-  return invoke<void>("paste_terminal", { sessionId, data }).catch((err: unknown) => {
+  return ordered(sessionId, () => invoke<void>("paste_terminal", { sessionId, data })).catch((err: unknown) => {
     console.error("[paste_terminal] IPC error:", err, "sessionId:", sessionId);
     throw err;
   });
@@ -39,7 +97,7 @@ export async function pasteTerminalData(sessionId: string, data: string) {
 
 export async function resizeTerminalSession(sessionId: string, request: ResizeTerminalRequest) {
   ensureTauriRuntime();
-  return invoke<void>("resize_terminal", { sessionId, request }).catch((err: unknown) => {
+  return ordered(sessionId, () => invoke<void>("resize_terminal", { sessionId, request })).catch((err: unknown) => {
     console.error("[resize_terminal] IPC error:", err, "sessionId:", sessionId);
     throw err;
   });

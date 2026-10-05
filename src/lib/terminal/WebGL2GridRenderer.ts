@@ -14,6 +14,7 @@ import type { GridRenderer, SelectionRange } from "./GridRenderer";
 import { measureCellMetrics } from "./CanvasGridRenderer";
 import { pickReadableColor } from "./contrast";
 import { GlyphAtlas } from "./webgl/glyphAtlas";
+import { ThemeVarCache } from "./themeVars";
 
 interface RendererOptions {
   fontFamily: string;
@@ -167,8 +168,18 @@ export class WebGL2GridRenderer implements GridRenderer {
   private blinkTimer: ReturnType<typeof setInterval> | null = null;
   private focused = true;
   private rafHandle = 0;
+  private rafScheduled = false;
   private dirty = true;
+  private visible = true;
   private disposed = false;
+  private themeVars: ThemeVarCache;
+
+  // Reused per-draw scratch buffers (sized in setGrid). Allocating fresh
+  // typed arrays and number[]s on every frame was a steady source of GC
+  // pauses under heavy output.
+  private bgBuf = new Float32Array(0);
+  private glyphBuf = new Float32Array(0);
+  private decoScratch: number[] = [];
 
   private displayOffset = 0;
   private historySize = 0;
@@ -177,7 +188,13 @@ export class WebGL2GridRenderer implements GridRenderer {
 
   constructor(canvas: HTMLCanvasElement, opts: RendererOptions) {
     this.canvas = canvas;
-    const gl = canvas.getContext("webgl2", { alpha: true, antialias: false });
+    this.themeVars = new ThemeVarCache(canvas);
+    const gl = canvas.getContext("webgl2", {
+      alpha: true,
+      antialias: false,
+      // Hint the browser to pick the discrete/fast GPU path where it matters.
+      powerPreference: "high-performance",
+    });
     if (!gl) throw new Error("WebGL2 unavailable");
     this.gl = gl;
     this.opts = opts;
@@ -224,7 +241,7 @@ export class WebGL2GridRenderer implements GridRenderer {
     this.cellHeight = cellHeight;
     this.atlas = new GlyphAtlas(gl, { fontFamily: opts.fontFamily, fontSize: opts.fontSize, cellWidth, cellHeight });
 
-    this.rafHandle = requestAnimationFrame(this.frameLoop);
+    this.markDirty();
   }
 
   private buildSolidVao(program: WebGLProgram, instanceVbo: WebGLBuffer): WebGLVertexArrayObject {
@@ -309,7 +326,9 @@ export class WebGL2GridRenderer implements GridRenderer {
 
     this.grid = new Array(cols * rows).fill(BLANK_CELL);
     this.text = new Array(cols * rows).fill(" ");
-    this.dirty = true;
+    this.bgBuf = new Float32Array(cols * rows * SOLID_STRIDE);
+    this.glyphBuf = new Float32Array(cols * rows * GLYPH_STRIDE);
+    this.markDirty();
   }
 
   getCellMetrics() {
@@ -345,7 +364,7 @@ export class WebGL2GridRenderer implements GridRenderer {
 
   setSelection(range: SelectionRange | null) {
     this.selection = range;
-    this.dirty = true;
+    this.markDirty();
   }
 
   /** Reads a live CSS custom property off the canvas (so per-theme
@@ -355,8 +374,7 @@ export class WebGL2GridRenderer implements GridRenderer {
    * which can hand its string result straight to a 2D context and so
    * doesn't need the parsing step. */
   private themeColor(varName: string, fallback: string): [number, number, number, number] {
-    const value = getComputedStyle(this.canvas).getPropertyValue(varName).trim();
-    return parseCssColor(value || fallback);
+    return parseCssColor(this.themeVars.get(varName) || fallback);
   }
 
   /** Same shape/semantics as `CanvasGridRenderer`'s — see that file's
@@ -392,7 +410,7 @@ export class WebGL2GridRenderer implements GridRenderer {
     if (enabled) {
       this.blinkTimer = setInterval(() => {
         this.cursor.blinkOn = !this.cursor.blinkOn;
-        this.dirty = true;
+        this.markDirty();
       }, 530);
     }
   }
@@ -400,13 +418,14 @@ export class WebGL2GridRenderer implements GridRenderer {
   setFocused(focused: boolean) {
     if (this.focused === focused) return;
     this.focused = focused;
-    this.dirty = true;
+    this.markDirty();
   }
 
   dispose() {
     this.disposed = true;
     if (this.blinkTimer) clearInterval(this.blinkTimer);
     cancelAnimationFrame(this.rafHandle);
+    this.rafScheduled = false;
     const gl = this.gl;
     gl.deleteProgram(this.solidProgram);
     gl.deleteProgram(this.glyphProgram);
@@ -469,17 +488,31 @@ export class WebGL2GridRenderer implements GridRenderer {
     this.displayOffset = frame.displayOffset;
     this.historySize = Math.max(0, frame.totalLines - frame.rows);
     this.mouseMode = frame.mouseMode;
+    this.markDirty();
+  }
+
+  /** Marks the canvas stale and schedules (at most) one repaint. There is
+   * no free-running rAF loop: an idle pane costs nothing, and a pane whose
+   * tab is hidden keeps its grid current but defers painting until shown. */
+  private markDirty() {
     this.dirty = true;
+    if (this.rafScheduled || this.disposed || !this.visible) return;
+    this.rafScheduled = true;
+    this.rafHandle = requestAnimationFrame(this.frameLoop);
   }
 
   private frameLoop = () => {
-    if (this.disposed) return;
-    if (this.dirty) {
-      this.dirty = false;
-      this.draw();
-    }
-    this.rafHandle = requestAnimationFrame(this.frameLoop);
+    this.rafScheduled = false;
+    if (this.disposed || !this.visible || !this.dirty) return;
+    this.dirty = false;
+    this.draw();
   };
+
+  setVisible(visible: boolean) {
+    if (this.visible === visible) return;
+    this.visible = visible;
+    if (visible) this.markDirty();
+  }
 
   private resolvedBg(cell: DecodedCell): number {
     return (cell.flags & CellFlags.INVERSE) !== 0 ? cell.fg : cell.bg;
@@ -518,31 +551,49 @@ export class WebGL2GridRenderer implements GridRenderer {
     // selection fill (see contrast.ts), so text a program printed in a
     // color meant for a dark background stays readable once selected.
     const readableSelection =
-      plainSelectionBg && getComputedStyle(this.canvas).getPropertyValue("--glyph-color-scheme").trim() === "light"
+      plainSelectionBg && this.themeVars.get("--glyph-color-scheme") === "light"
         ? { selectionBg: plainSelectionBg, themeBg: this.themeColor("--glyph-bg", "#ffffff") }
         : null;
 
-    // --- Backgrounds: exactly cols*rows instances, always. ---
-    const bg = new Float32Array(cols * rows * SOLID_STRIDE);
+    // --- Backgrounds: one instance per cell that actually has a fill. ---
+    // Default-background cells are fully transparent, so they are skipped
+    // outright (the typical screen is mostly blank), and instances are
+    // written into a reused buffer instead of a fresh Float32Array.
+    const bg = this.bgBuf;
+    let bgCount = 0;
     for (let row = 0; row < rows; row++) {
       const searchCols = searchMatchBg ? this.selectionColsForRow(row) : null;
       const selCols = plainSelectionBg ? this.selectionColsForRow(row) : null;
+      const special = searchCols !== null || selCols !== null;
       for (let col = 0; col < cols; col++) {
-        const idx = row * cols + col;
-        const cell = this.grid[idx];
-        let [r, g, b, a] =
-          searchCols && col >= searchCols[0] && col < searchCols[1] ? searchMatchBg! : unpackRgba(this.resolvedBg(cell));
-        if (selCols && col >= selCols[0] && col < selCols[1] && !(searchCols && col >= searchCols[0] && col < searchCols[1])) {
-          const [sr, sg, sb, sa] = plainSelectionBg!;
-          const outA = sa + a * (1 - sa);
-          if (outA > 0) {
-            r = (sr * sa + r * a * (1 - sa)) / outA;
-            g = (sg * sa + g * a * (1 - sa)) / outA;
-            b = (sb * sa + b * a * (1 - sa)) / outA;
+        const cell = this.grid[row * cols + col];
+        const packed = (cell.flags & CellFlags.INVERSE) !== 0 ? cell.fg : cell.bg;
+        let r: number;
+        let g: number;
+        let b: number;
+        let a: number;
+        if (special) {
+          const inSearch = searchCols !== null && col >= searchCols[0] && col < searchCols[1];
+          [r, g, b, a] = inSearch ? searchMatchBg! : unpackRgba(packed);
+          if (selCols && col >= selCols[0] && col < selCols[1] && !inSearch) {
+            const [sr, sg, sb, sa] = plainSelectionBg!;
+            const outA = sa + a * (1 - sa);
+            if (outA > 0) {
+              r = (sr * sa + r * a * (1 - sa)) / outA;
+              g = (sg * sa + g * a * (1 - sa)) / outA;
+              b = (sb * sa + b * a * (1 - sa)) / outA;
+            }
+            a = outA;
           }
-          a = outA;
+        } else {
+          if ((packed & 0xff) === 0) continue;
+          r = ((packed >>> 24) & 0xff) / 255;
+          g = ((packed >>> 16) & 0xff) / 255;
+          b = ((packed >>> 8) & 0xff) / 255;
+          a = (packed & 0xff) / 255;
         }
-        const o = idx * SOLID_STRIDE;
+        if (a <= 0) continue;
+        const o = bgCount * SOLID_STRIDE;
         bg[o] = col;
         bg[o + 1] = row;
         bg[o + 2] = 1;
@@ -551,29 +602,33 @@ export class WebGL2GridRenderer implements GridRenderer {
         bg[o + 5] = g;
         bg[o + 6] = b;
         bg[o + 7] = a;
+        bgCount++;
       }
     }
-    gl.bindBuffer(gl.ARRAY_BUFFER, this.solidInstanceVbo);
-    gl.bufferData(gl.ARRAY_BUFFER, bg, gl.DYNAMIC_DRAW);
+    if (bgCount > 0) {
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.solidInstanceVbo);
+      gl.bufferData(gl.ARRAY_BUFFER, bg, gl.DYNAMIC_DRAW, 0, bgCount * SOLID_STRIDE);
 
-    gl.useProgram(this.solidProgram);
-    gl.bindVertexArray(this.solidVao);
-    gl.uniform2f(this.solidUniforms.resolution, this.canvas.width, this.canvas.height);
-    gl.uniform2f(this.solidUniforms.cellSize, cellWidth * this.dpr, cellHeight * this.dpr);
-    gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, cols * rows);
+      gl.useProgram(this.solidProgram);
+      gl.bindVertexArray(this.solidVao);
+      gl.uniform2f(this.solidUniforms.resolution, this.canvas.width, this.canvas.height);
+      gl.uniform2f(this.solidUniforms.cellSize, cellWidth * this.dpr, cellHeight * this.dpr);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, bgCount);
+    }
 
     // --- Glyphs: one instance per non-blank, non-spacer, non-hidden cell. ---
-    const glyphData: number[] = [];
+    const glyphBuf = this.glyphBuf;
+    let glyphCount = 0;
+    const atlasGeneration = this.atlas.generation;
     for (let row = 0; row < rows; row++) {
       const searchCols = searchMatchFg ? this.selectionColsForRow(row) : null;
       const readableCols = readableSelection ? this.selectionColsForRow(row) : null;
       for (let col = 0; col < cols; col++) {
         const idx = row * cols + col;
-        const cell = this.grid[idx];
-        if (cell.flags & CellFlags.WIDE_CHAR_SPACER) continue;
-        if (cell.flags & CellFlags.HIDDEN) continue;
         const text = this.text[idx];
         if (!text || text === " ") continue;
+        const cell = this.grid[idx];
+        if (cell.flags & (CellFlags.WIDE_CHAR_SPACER | CellFlags.HIDDEN)) continue;
 
         const wide = (cell.flags & CellFlags.WIDE_CHAR) !== 0;
         const bold = (cell.flags & CellFlags.BOLD) !== 0;
@@ -582,32 +637,45 @@ export class WebGL2GridRenderer implements GridRenderer {
         if (!rect) continue;
 
         const inSearchMatch = searchCols !== null && col >= searchCols[0] && col < searchCols[1];
-        let [r, g, b, a] = inSearchMatch ? searchMatchFg! : unpackRgba(this.resolvedFg(cell));
+        const inverse = (cell.flags & CellFlags.INVERSE) !== 0;
+        let r: number;
+        let g: number;
+        let b: number;
+        let a: number;
+        if (inSearchMatch) {
+          [r, g, b, a] = searchMatchFg!;
+        } else {
+          const packed = inverse ? cell.bg : cell.fg;
+          r = ((packed >>> 24) & 0xff) / 255;
+          g = ((packed >>> 16) & 0xff) / 255;
+          b = ((packed >>> 8) & 0xff) / 255;
+          a = (packed & 0xff) / 255;
+        }
         if (readableCols && col >= readableCols[0] && col < readableCols[1]) {
-          const cellBg = unpackRgba(this.resolvedBg(cell));
+          const cellBg = unpackRgba(inverse ? cell.fg : cell.bg);
           const [br, bgG, bb] = cellBg[3] > 0 ? cellBg : readableSelection!.themeBg;
           [r, g, b, a] = pickReadableColor([r, g, b, a], [br, bgG, bb], readableSelection!.selectionBg);
         }
         const dim = !inSearchMatch && (cell.flags & CellFlags.DIM) !== 0;
-        glyphData.push(
-          col,
-          row,
-          rect.cellSpan,
-          1,
-          rect.u0,
-          rect.v0,
-          rect.u1,
-          rect.v1,
-          r,
-          g,
-          b,
-          dim ? a * 0.65 : a,
-        );
+        const o = glyphCount * GLYPH_STRIDE;
+        glyphBuf[o] = col;
+        glyphBuf[o + 1] = row;
+        glyphBuf[o + 2] = rect.cellSpan;
+        glyphBuf[o + 3] = 1;
+        glyphBuf[o + 4] = rect.u0;
+        glyphBuf[o + 5] = rect.v0;
+        glyphBuf[o + 6] = rect.u1;
+        glyphBuf[o + 7] = rect.v1;
+        glyphBuf[o + 8] = r;
+        glyphBuf[o + 9] = g;
+        glyphBuf[o + 10] = b;
+        glyphBuf[o + 11] = dim ? a * 0.65 : a;
+        glyphCount++;
       }
     }
-    if (glyphData.length > 0) {
+    if (glyphCount > 0) {
       gl.bindBuffer(gl.ARRAY_BUFFER, this.glyphInstanceVbo);
-      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(glyphData), gl.DYNAMIC_DRAW);
+      gl.bufferData(gl.ARRAY_BUFFER, glyphBuf, gl.DYNAMIC_DRAW, 0, glyphCount * GLYPH_STRIDE);
 
       gl.useProgram(this.glyphProgram);
       gl.bindVertexArray(this.glyphVao);
@@ -616,15 +684,21 @@ export class WebGL2GridRenderer implements GridRenderer {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.atlas.texture);
       gl.uniform1i(this.glyphUniforms.atlas, 0);
-      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, glyphData.length / GLYPH_STRIDE);
+      gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, glyphCount);
     }
+    // The atlas wrapped around mid-frame (it filled up and was reset), so some
+    // rects handed out above point at slots that were since overwritten.
+    // Repaint once more with a consistent atlas.
+    if (this.atlas.generation !== atlasGeneration) this.markDirty();
 
     // --- Decorations (underline/strikethrough) + cursor: sparse. ---
-    const deco: number[] = [];
+    const deco = this.decoScratch;
+    deco.length = 0;
+    const DECO_FLAGS = ALL_UNDERLINE_FLAGS | CellFlags.STRIKETHROUGH;
     for (let row = 0; row < rows; row++) {
       for (let col = 0; col < cols; col++) {
         const cell = this.grid[row * cols + col];
-        if (cell.flags & CellFlags.HIDDEN) continue;
+        if ((cell.flags & DECO_FLAGS) === 0 || cell.flags & CellFlags.HIDDEN) continue;
         const [r, g, b, a] = unpackRgba(this.resolvedFg(cell));
         if (cell.flags & ALL_UNDERLINE_FLAGS) {
           deco.push(col, row + 0.85, 1, 0.1, r, g, b, a);

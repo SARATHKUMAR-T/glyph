@@ -56,7 +56,7 @@ sequenceDiagram
         Backend->>IPC: emit("terminal:semantic")
     end
 
-    loop Flush Thread (~4ms cadence)
+    loop Flush Thread (woken by output, ≥16ms between frames)
         Backend->>Backend: GridEngine.build_frame() if the grid is damaged
         Backend->>IPC: channel.send(binary damage frame)
         IPC->>FE: renderer.applyFrameBytes(frame)
@@ -81,7 +81,7 @@ sequenceDiagram
 2. **Data Streaming & Shell Integration**:
    - The reader thread parses raw byte streams for **OSC 133** shell integration events (`PromptStart`, `CommandExecutionStart`, `CommandFinished`), emitted to the webview as `terminal:semantic` events for building structured execution blocks.
    - The same bytes are fed into the Rust `GridEngine` (`src-tauri/src/terminal/engine`), which owns the VT parser and grid/scrollback state.
-   - A separate flush thread polls each session's `GridEngine` roughly every 4ms and, if the grid is damaged, streams a compact binary frame over a Tauri `Channel` (`engine_attach_channel`) — no JSON/string serialization on the output hot path.
+   - A separate flush thread per session sleeps on a condvar until the engine is damaged (no idle polling), sends the first frame after a quiet period immediately, coalesces further output to at most one frame per 16ms, and streams a compact binary frame over a Tauri `Channel` (`engine_attach_channel`) — no JSON/string serialization on the output hot path.
    - `WebGL2GridRenderer` (falling back to `CanvasGridRenderer`) applies each frame directly onto a `<canvas>`, so the DOM never grows one node per terminal cell.
 
 3. **Input Handling & Clipboard**:

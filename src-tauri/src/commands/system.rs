@@ -6,8 +6,11 @@ pub struct SystemMonitorState(pub Mutex<System>);
 
 impl Default for SystemMonitorState {
     fn default() -> Self {
-        let mut sys = System::new_all();
-        sys.refresh_all();
+        // Only CPU + memory are ever read. `new_all`/`refresh_all` would walk
+        // every process in /proc at startup for data nothing uses.
+        let mut sys = System::new();
+        sys.refresh_cpu_usage();
+        sys.refresh_memory();
         Self(Mutex::new(sys))
     }
 }
@@ -24,7 +27,7 @@ pub struct SystemPerfStats {
     pub swap_total_bytes: u64,
 }
 
-#[tauri::command(rename_all = "camelCase")]
+#[tauri::command(rename_all = "camelCase", async)]
 pub fn get_system_perf_stats(
     state: State<'_, SystemMonitorState>,
 ) -> Result<SystemPerfStats, String> {

@@ -15,9 +15,11 @@ import { MouseTrackingLevel } from "../../lib/terminal/engineProtocol";
 import {
   closeTerminalSession,
   createTerminalSession,
+  feedEngineLocal,
   openExternalUrl,
   pasteTerminalData,
   resizeTerminalSession,
+  setEngineScroll,
   writeTerminalData,
 } from "../../hooks/useTerminalSession";
 import { isTauriRuntime, listenTerminalSemantic } from "../../lib/terminal/events";
@@ -175,7 +177,7 @@ const QUOTE_SPINNER_FRAMES =["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "�
  * interleave with them.
  */
 async function runQuoteEasterEgg(sessionId: string, sendBytes: (bytes: string) => void) {
-  const feedLocal = (text: string) => void invoke("engine_feed_local", { sessionId, data: text }).catch(() => {});
+  const feedLocal = (text: string) => feedEngineLocal(sessionId, text);
 
   feedLocal("\r\n");
   let frame = 0;
@@ -404,6 +406,7 @@ export function GlyphEngineTerminalView({
         lineHeight: LINE_HEIGHT,
       });
       renderer.setGrid(cols, rows);
+      renderer.setVisible(active);
       renderer.setFocused(active && isPaneActive);
       renderer.setBlinkEnabled(active && isPaneActive && (settings?.cursorBlink ?? true));
       rendererRef.current = renderer;
@@ -592,7 +595,7 @@ export function GlyphEngineTerminalView({
       const history = renderer.getHistorySize();
       const next = Math.max(0, Math.min(history, renderer.getDisplayOffset() + delta));
       if (next === renderer.getDisplayOffset()) return;
-      void invoke("engine_set_scroll", { sessionId, displayOffset: next }).catch(() => {});
+      setEngineScroll(sessionId, next);
     };
     host.addEventListener("wheel", handleWheelNative, { passive: false });
 
@@ -615,6 +618,7 @@ export function GlyphEngineTerminalView({
   useEffect(() => {
     activeRef.current = active;
     isPaneActiveRef.current = isPaneActive;
+    rendererRef.current?.setVisible(active);
     rendererRef.current?.setFocused(active && isPaneActive);
     rendererRef.current?.setBlinkEnabled(active && isPaneActive && (settings?.cursorBlink ?? true));
   }, [active, isPaneActive, settings?.cursorBlink]);
@@ -638,7 +642,7 @@ export function GlyphEngineTerminalView({
   // bottom so the user sees what they're typing.
   const snapToBottom = (sessionId: string) => {
     if ((rendererRef.current?.getDisplayOffset() ?? 0) > 0) {
-      void invoke("engine_set_scroll", { sessionId, displayOffset: 0 }).catch(() => {});
+      setEngineScroll(sessionId, 0);
     }
   };
 
@@ -814,7 +818,7 @@ export function GlyphEngineTerminalView({
       const targetThumbTop = Math.max(0, Math.min(travel, event.clientY - trackRect.top - thumbHeight / 2));
       const fraction = travel > 0 ? targetThumbTop / travel : 0;
       startOffset = Math.round(history * (1 - fraction));
-      void invoke("engine_set_scroll", { sessionId, displayOffset: startOffset }).catch(() => {});
+      setEngineScroll(sessionId, startOffset);
     }
 
     event.currentTarget.setPointerCapture(event.pointerId);
@@ -838,7 +842,7 @@ export function GlyphEngineTerminalView({
     const deltaY = event.clientY - drag.startClientY;
     const deltaOffset = Math.round((-deltaY / travel) * history);
     const next = Math.max(0, Math.min(history, drag.startOffset + deltaOffset));
-    void invoke("engine_set_scroll", { sessionId, displayOffset: next }).catch(() => {});
+    setEngineScroll(sessionId, next);
   };
 
   const handleScrollbarPointerUp = () => {
@@ -1158,7 +1162,7 @@ export function GlyphEngineTerminalView({
         const page = Math.max(1, lastSizeRef.current.rows - 1);
         const delta = event.key === "PageUp" ? page : -page;
         const offset = Math.min(history, Math.max(0, renderer.getDisplayOffset() + delta));
-        void invoke("engine_set_scroll", { sessionId, displayOffset: offset }).catch(() => {});
+        setEngineScroll(sessionId, offset);
         return;
       }
     }
