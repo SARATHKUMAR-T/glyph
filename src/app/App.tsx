@@ -7,6 +7,7 @@ import { Settings } from "../components/settings/Settings";
 import { TerminalPanePortals } from "../components/terminal/TerminalPanePortals";
 import { TerminalSplitView } from "../components/terminal/TerminalSplitView";
 import { TerminalTabs } from "../components/tabs/TerminalTabs";
+import { ConfirmCloseModal } from "../components/window/ConfirmCloseModal";
 import { TitleBar } from "../components/window/TitleBar";
 import { WindowResizeHandles } from "../components/window/WindowResizeHandles";
 import { MatrixDotBackground } from "../components/terminal/MatrixDotBackground";
@@ -573,6 +574,7 @@ export function App({ initialSession }: AppProps) {
   return (
     <div className="app-shell">
       <WindowResizeHandles />
+      <ConfirmCloseModal />
       <MatrixDotBackground
         enabled={settings.matrixEnabled && getTheme(settings.themeId).category !== "light"}
         style={settings.matrixStyle}

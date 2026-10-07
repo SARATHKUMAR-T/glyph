@@ -86,3 +86,17 @@ pub fn open_url(url: String) -> Result<(), String> {
     open::that(&url).map_err(|e| e.to_string())
 }
 
+
+/// How many terminals have a program running in them; the close-confirmation
+/// modal only appears when this is non-zero.
+#[tauri::command(rename_all = "camelCase")]
+pub fn running_process_count(manager: State<'_, TerminalManager>) -> usize {
+    manager.running_process_count()
+}
+
+/// Kills every terminal and exits the app.
+#[tauri::command(rename_all = "camelCase", async)]
+pub fn quit_app(app: AppHandle, manager: State<'_, TerminalManager>) {
+    manager.close_all(&app);
+    app.exit(0);
+}

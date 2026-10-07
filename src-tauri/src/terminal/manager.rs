@@ -149,6 +149,39 @@ impl TerminalManager {
         })
     }
 
+    /// Number of terminals that currently have a program running under the
+    /// shell (anything other than an idle prompt).
+    pub fn running_process_count(&self) -> usize {
+        let pids: Vec<u32> = match self.sessions.lock() {
+            Ok(sessions) => sessions.values().filter_map(|s| s.pid).collect(),
+            Err(_) => return 0,
+        };
+        if pids.is_empty() {
+            return 0;
+        }
+        let mut system = sysinfo::System::new();
+        system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
+        pids.iter()
+            .filter(|pid| {
+                system
+                    .processes()
+                    .values()
+                    .any(|process| process.parent().map(|p| p.as_u32()) == Some(**pid))
+            })
+            .count()
+    }
+
+    /// Kills every shell (and thereby its foreground job) and drops the sessions.
+    pub fn close_all(&self, app: &AppHandle) {
+        let ids: Vec<String> = match self.sessions.lock() {
+            Ok(sessions) => sessions.keys().cloned().collect(),
+            Err(_) => return,
+        };
+        for id in ids {
+            let _ = self.close_terminal(app, &id);
+        }
+    }
+
     pub fn list_sessions(&self) -> Result<Vec<TerminalSessionInfo>, TerminalError> {
         let sessions = self
             .sessions

@@ -16,7 +16,11 @@
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{App, AppHandle, Manager, WindowEvent};
+use tauri::{App, AppHandle, Emitter, Manager, WindowEvent};
+
+use crate::terminal::manager::TerminalManager;
+
+const CONFIRM_CLOSE_EVENT: &str = "app://confirm-close";
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 
 const MAIN_WINDOW: &str = "main";
@@ -97,17 +101,24 @@ pub fn setup(app: &App) {
 
     register_quake_shortcut(app);
 
-    if tray_built {
-        if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
-            let handle = app.handle().clone();
-            window.on_window_event(move |event| {
-                if let WindowEvent::CloseRequested { api, .. } = event {
-                    api.prevent_close();
-                    if let Some(window) = handle.get_webview_window(MAIN_WINDOW) {
-                        let _ = window.hide();
-                    }
+    if let Some(window) = app.get_webview_window(MAIN_WINDOW) {
+        let handle = app.handle().clone();
+        window.on_window_event(move |event| {
+            let WindowEvent::CloseRequested { api, .. } = event else {
+                return;
+            };
+            // Running programs: hold the close and let the frontend ask.
+            // Confirming calls `quit_app`, which kills every terminal.
+            let running = handle.state::<TerminalManager>().running_process_count();
+            if running > 0 {
+                api.prevent_close();
+                let _ = handle.emit(CONFIRM_CLOSE_EVENT, running);
+            } else if tray_built {
+                api.prevent_close();
+                if let Some(window) = handle.get_webview_window(MAIN_WINDOW) {
+                    let _ = window.hide();
                 }
-            });
-        }
+            }
+        });
     }
 }

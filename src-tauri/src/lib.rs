@@ -14,7 +14,7 @@ use commands::session::{clear_session, load_session, save_session};
 use commands::system::{get_system_perf_stats, SystemMonitorState};
 use commands::terminal::{
     close_terminal, create_terminal, get_terminal_cwd, list_sessions, open_url, paste_terminal,
-    resize_terminal, write_terminal,
+    quit_app, resize_terminal, running_process_count, write_terminal,
 };
 use commands::workspace::{delete_workspace, get_workspace, get_workspaces, save_workspace};
 use tauri::Manager;
@@ -42,6 +42,8 @@ pub fn run() {
             paste_terminal,
             resize_terminal,
             close_terminal,
+            running_process_count,
+            quit_app,
             list_sessions,
             get_terminal_cwd,
             open_url,
