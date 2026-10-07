@@ -676,8 +676,7 @@ export function Settings({
               Glyph checks GitHub Releases for newer builds every 6 hours. Staging an
               update places its install command in the active terminal — nothing runs
               until you press Enter. Once it finishes, use <strong>Restart Now</strong> above
-              to pick up the new build — closing the window alone won't do it, since Glyph
-              keeps running in the background (tray icon) until it's told to quit.
+              to pick up the new build.
             </p>
           </div>
         )}

@@ -235,15 +235,11 @@ The script itself (Linux only, for now):
    force-closing itself mid-way through the user's session would be a
    worse experience than asking them to restart when convenient.
 
-   This is a real button, not just advice, because closing the window is
-   *not* enough here: Glyph has a tray icon (`src-tauri/src/tray.rs`), and
-   closing the main window only hides it — the process, with the
-   pre-update binary already loaded into memory, keeps running in the
-   background. Reopening the window from the tray shows the *same* old
-   process, so `getVersion()` keeps reporting the old version and the
-   badge keeps nagging even though the file on disk has already been
-   replaced. Only an actual process relaunch (full quit + re-exec) picks
-   up the new binary — hence a dedicated Restart action instead of relying
+   This is a real button, not just advice: the running process still has
+   the pre-update binary loaded in memory, so `getVersion()` keeps
+   reporting the old version until the process is relaunched. Only an
+   actual process relaunch (full quit + re-exec) picks up the new binary —
+   hence a dedicated Restart action instead of relying
    on window close.
 
 ---
@@ -302,4 +298,4 @@ later means:
 | Wiring (active pane → PTY write) | `src/app/App.tsx` (`handleApplyUpdate`) |
 | Install script | `scripts/self-update.sh` |
 | Release pipeline | `.github/workflows/release.yml` |
-| Tray / close-to-tray behavior | `src-tauri/src/tray.rs` |
+| Quake hotkey + close confirmation | `src-tauri/src/tray.rs` |
