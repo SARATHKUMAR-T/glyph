@@ -33,6 +33,7 @@ import type {
   TerminalSessionInfo,
   TerminalStatus,
 } from "../../lib/terminal/types";
+import { InlineRename } from "../ui/InlineRename";
 import { TerminalBlock } from "./TerminalBlock";
 
 export type TerminalViewProps = {
@@ -65,6 +66,7 @@ export type TerminalViewProps = {
   onSessionResize: (paneId: string, cols: number, rows: number) => void;
   onSessionStatus: (paneId: string, status: TerminalStatus, error?: string) => void;
   onTitleChange?: (paneId: string, title: string) => void;
+  onRenamePane?: (paneId: string, title: string) => void;
   isWindowMaximized?: boolean;
   onToggleSettings?: () => void;
   onSaveWorkspace?: () => void;
@@ -266,6 +268,7 @@ export function GlyphEngineTerminalView({
   onClosePane,
   onCloseSearch,
   onCloseTerminal,
+  onRenamePane,
   onExpandPane,
   onNewTerminal,
   onNewWindow,
@@ -1350,17 +1353,33 @@ export function GlyphEngineTerminalView({
       <div className="pane-header-bar">
         <div className="pane-header-left">
           <span className={`pane-status-dot pane-status-${pane.status}`} aria-hidden="true" />
-          <span
-            style={{
-              fontSize: "11px",
-              fontWeight: 600,
-              letterSpacing: "0.5px",
-              color: "var(--nothing-gray-100)",
-              textTransform: "uppercase",
-            }}
-          >
-            {pane.title ?? "engine preview"}
-          </span>
+          {onRenamePane ? (
+            <InlineRename
+              value={pane.title ?? "engine preview"}
+              label="Rename Pane"
+              textStyle={{
+                fontSize: "11px",
+                fontWeight: 600,
+                letterSpacing: "0.5px",
+                color: "var(--nothing-gray-100)",
+                textTransform: "uppercase",
+              }}
+              onCommit={(title) => onRenamePane(pane.paneId, title)}
+              onFinish={() => inputRef.current?.focus()}
+            />
+          ) : (
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                letterSpacing: "0.5px",
+                color: "var(--nothing-gray-100)",
+                textTransform: "uppercase",
+              }}
+            >
+              {pane.title ?? "engine preview"}
+            </span>
+          )}
         </div>
         <div className="pane-header-controls">
           {isSplit && !isExpanded && isWindowMaximized && (

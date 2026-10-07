@@ -11,6 +11,7 @@ type TerminalTabsProps = {
   onActivate: (clientId: string) => void;
   onClose: (clientId: string) => void;
   onNewTerminal: () => void;
+  onRename: (clientId: string, title: string) => void;
   onReorder: (tabs: TerminalTabModel[]) => void;
 };
 
@@ -19,6 +20,7 @@ export function TerminalTabs({
   onActivate,
   onClose,
   onNewTerminal,
+  onRename,
   onReorder,
   tabs,
 }: TerminalTabsProps) {
@@ -53,6 +55,7 @@ export function TerminalTabs({
               dropIndicator={dropTarget?.id === tab.clientId ? dropTarget.position : null}
               onActivate={onActivate}
               onClose={onClose}
+              onRename={onRename}
               onDragStart={setDraggedId}
               onDragOver={(clientId, position) => {
                 if (!clientId || !position || clientId === draggedId) {

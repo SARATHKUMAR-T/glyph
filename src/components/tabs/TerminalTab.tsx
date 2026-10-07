@@ -1,6 +1,7 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
+import { RenameInput, RenamePencil } from "../ui/InlineRename";
 import type { TerminalStatus, TerminalTabModel } from "../../lib/terminal/types";
 
 type TerminalTabProps = {
@@ -13,6 +14,7 @@ type TerminalTabProps = {
   dropIndicator: "before" | "after" | null;
   onActivate: (clientId: string) => void;
   onClose: (clientId: string) => void;
+  onRename: (clientId: string, title: string) => void;
   onDragStart: (clientId: string) => void;
   onDragOver: (clientId: string | null, position: "before" | "after" | null) => void;
   onDrop: () => void;
@@ -34,12 +36,14 @@ export function TerminalTab({
   onDragOver,
   onDragStart,
   onDrop,
+  onRename,
   paneCount,
   status,
   tab,
 }: TerminalTabProps) {
   const displayTitle = paneCount > 1 ? `${tab.title} (${paneCount} Panes)` : tab.title;
 
+  const [editing, setEditing] = useState(false);
   const startPos = useRef<{ x: number; y: number } | null>(null);
   const dragging = useRef(false);
 
@@ -110,17 +114,34 @@ export function TerminalTab({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
     >
-      <button
-        aria-selected={active}
-        className="terminal-tab-main"
-        role="tab"
-        title={displayTitle}
-        type="button"
-        onClick={() => onActivate(tab.clientId)}
-      >
-        <span className={`tab-status tab-status-${status}`} aria-hidden="true" />
-        <span className="tab-title">{displayTitle}</span>
-      </button>
+      {editing ? (
+        <div className="terminal-tab-rename">
+          <RenameInput
+            value={tab.title}
+            label={`Rename ${tab.title}`}
+            onDone={(next) => {
+              setEditing(false);
+              if (next) onRename(tab.clientId, next);
+            }}
+          />
+        </div>
+      ) : (
+        <>
+          <button
+            aria-selected={active}
+            className="terminal-tab-main"
+            role="tab"
+            title={`${displayTitle} — double-click to rename`}
+            type="button"
+            onClick={() => onActivate(tab.clientId)}
+            onDoubleClick={() => setEditing(true)}
+          >
+            <span className={`tab-status tab-status-${status}`} aria-hidden="true" />
+            <span className="tab-title">{displayTitle}</span>
+          </button>
+          <RenamePencil label={`Rename ${tab.title}`} onClick={() => setEditing(true)} />
+        </>
+      )}
       <button
         aria-label={`Close ${tab.title}`}
         className="terminal-tab-close"

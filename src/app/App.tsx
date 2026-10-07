@@ -458,6 +458,22 @@ export function App({ initialSession }: AppProps) {
     [],
   );
 
+  const handleRenameTab = useCallback((clientId: string, title: string) => {
+    setTabs((current) =>
+      current.map((tab) => (tab.clientId === clientId ? { ...tab, title } : tab)),
+    );
+  }, []);
+
+  const handleRenamePane = useCallback((paneId: string, title: string) => {
+    setTabs((current) =>
+      current.map((tab) =>
+        findPaneNode(tab.rootNode, paneId)
+          ? { ...tab, rootNode: updatePaneInTree(tab.rootNode, paneId, { title }) }
+          : tab,
+      ),
+    );
+  }, []);
+
   const handleTitleChange = useCallback((paneId: string, title: string) => {
     setTabs((current) =>
       current.map((tab) => {
@@ -627,6 +643,7 @@ export function App({ initialSession }: AppProps) {
             setExpandedPane(null);
           }}
           onClose={closeTab}
+          onRename={handleRenameTab}
           onNewTerminal={() => {
             addTerminal();
             setSettingsOpen(false);
@@ -689,6 +706,7 @@ export function App({ initialSession }: AppProps) {
                   onSplitHorizontal={(paneId) => void splitActiveTerminal("horizontal", paneId)}
                   onSplitVertical={(paneId) => void splitActiveTerminal("vertical", paneId)}
                   onTitleChange={handleTitleChange}
+                  onRenamePane={handleRenamePane}
                   onToggleSettings={() => setSettingsOpen((open) => !open)}
                   onSaveWorkspace={() => {
                     setSaveCurrentWorkspaceOpen(true);

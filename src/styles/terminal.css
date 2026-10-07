@@ -811,3 +811,11 @@
 .expanded-placeholder-content svg {
   color: var(--glyph-accent);
 }
+
+.pane-header-left {
+  min-width: 0;
+}
+
+.pane-header-left .inline-rename-input {
+  width: 170px;
+}
