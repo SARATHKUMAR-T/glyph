@@ -574,7 +574,7 @@ export function App({ initialSession }: AppProps) {
     <div className="app-shell">
       <WindowResizeHandles />
       <MatrixDotBackground
-        enabled={getTheme(settings.themeId).category !== "light"}
+        enabled={settings.matrixEnabled && getTheme(settings.themeId).category !== "light"}
         style={settings.matrixStyle}
         speed={settings.matrixSpeed}
         interactive={settings.interactiveGlow}

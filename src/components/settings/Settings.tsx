@@ -416,7 +416,7 @@ export function Settings({
             </div>
             <div className="settings-group-header-right">
               <span className="settings-group-badge">
-                {isLightTheme ? "Disabled (Light)" : settings.matrixStyle}
+                {isLightTheme ? "Disabled (Light)" : settings.matrixEnabled ? settings.matrixStyle : "Off"}
               </span>
               <svg className="settings-group-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="m6 9 6 6 6-6" />
@@ -445,7 +445,18 @@ export function Settings({
                 </div>
               )}
 
-              <div className={`matrix-controls ${isLightTheme ? "matrix-controls-dimmed" : ""}`}>
+              <div className="settings-row">
+                <span>Enable Animation</span>
+                <button
+                  type="button"
+                  className={settings.matrixEnabled ? "settings-toggle is-active" : "settings-toggle"}
+                  onClick={() => onUpdateSettings({ matrixEnabled: !settings.matrixEnabled })}
+                >
+                  {settings.matrixEnabled ? "ON" : "OFF"}
+                </button>
+              </div>
+
+              <div className={`matrix-controls ${isLightTheme || !settings.matrixEnabled ? "matrix-controls-dimmed" : ""}`}>
                 <div className="settings-row">
                   <span>Pattern</span>
                   <CustomSelect
