@@ -1,6 +1,6 @@
 [package]
 name = "glyph-terminal"
-version = "0.5.0"
+version = "0.6.0"
 description = "A Nothing-inspired Linux terminal emulator."
 authors = ["Sarath"]
 edition = "2021"
@@ -21,8 +21,15 @@ tauri-build = { version = "2.6.3", features = [] }
 portable-pty = "0.9.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri = { version = "2.11.5", features = ["tray-icon"] }
+tauri = { version = "2.11.5", features = [] }
 tauri-plugin-clipboard-manager = "2"
+# Direct access (already pulled in by the clipboard plugin) for the Linux
+# PRIMARY selection, which the plugin doesn't expose — see
+# src/commands/selection.rs.
+arboard = { version = "3.6", default-features = false, features = ["wayland-data-control"] }
+# `killpg` for stopping a hung foreground job — see
+# `TerminalManager::stop_foreground_job`. Already in the tree via portable-pty.
+libc = "0.2"
 tauri-plugin-notification = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-process = "2"

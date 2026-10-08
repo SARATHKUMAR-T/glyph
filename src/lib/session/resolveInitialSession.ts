@@ -29,9 +29,10 @@ function blankSession(): InitialSession {
  * replacing it once this resolves would leak an orphaned shell process for
  * the rest of the app's lifetime. */
 export async function resolveInitialSession(): Promise<InitialSession> {
-  if (!isTauriRuntime() || !readStoredSettings().restoreTabsOnRestart) {
+  if (!isTauriRuntime()) {
     return blankSession();
   }
+  const restoreAllTabs = readStoredSettings().restoreTabsOnRestart;
 
   let session: Session | null = null;
   try {
@@ -40,11 +41,16 @@ export async function resolveInitialSession(): Promise<InitialSession> {
     console.error("[resolveInitialSession] load_session failed:", err);
   }
 
-  if (!session || session.tabs.length === 0) {
+  // With "Restore Tabs on Restart" off, only tabs from "Preserve Panes"
+  // workspaces come back (a session saved while the setting was still on
+  // can hold others).
+  const sessionTabs = session?.tabs.filter((tab) => restoreAllTabs || tab.preservePanes) ?? [];
+  if (!session || sessionTabs.length === 0) {
     return blankSession();
   }
+  const activeSessionTab = session.tabs[session.activeTabIndex];
 
-  const tabs: TerminalTabModel[] = session.tabs.map((sessionTab) => {
+  const tabs: TerminalTabModel[] = sessionTabs.map((sessionTab) => {
     const { rootNode } = workspaceLayoutToSplitNode(sessionTab.layout, sessionTab.panes);
     const panes = getAllPanesInTree(rootNode);
     return {
@@ -52,10 +58,12 @@ export async function resolveInitialSession(): Promise<InitialSession> {
       title: sessionTab.title || "Terminal",
       rootNode,
       activePaneId: panes[0]?.paneId || createId(),
+      preservePanes: sessionTab.preservePanes ?? false,
+      workspaceId: sessionTab.workspaceId ?? undefined,
     };
   });
 
-  const activeIndex = Math.min(Math.max(session.activeTabIndex, 0), tabs.length - 1);
+  const activeIndex = Math.max(0, sessionTabs.indexOf(activeSessionTab));
 
   return {
     tabs,

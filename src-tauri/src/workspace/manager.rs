@@ -343,7 +343,7 @@ impl WorkspaceManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::workspace::model::{CommandConfig, SessionTab, WorkspacePaneConfig};
+    use crate::workspace::model::{CommandConfig, ConnectionLossAction, SessionTab, WorkspacePaneConfig};
     use std::path::PathBuf;
 
     fn temp_test_dir() -> PathBuf {
@@ -380,14 +380,17 @@ mod tests {
                         program: "npm".to_string(),
                         args: vec!["run".to_string(), "dev".to_string()],
                     }),
+                    on_connection_loss: Default::default(),
                 },
                 WorkspacePaneConfig {
                     id: "pane-2".to_string(),
                     name: "Backend".to_string(),
                     cwd: Some("/home/user/projects/backend".to_string()),
                     command: Some(CommandConfig::Raw("cargo run".to_string())),
+                    on_connection_loss: Default::default(),
                 },
             ],
+            preserve_panes: false,
             created_at: 0,
             updated_at: 0,
         }
@@ -438,6 +441,7 @@ mod tests {
             name: "Extra".to_string(),
             cwd: None,
             command: None,
+            on_connection_loss: Default::default(),
         });
 
         let err = manager.save_workspace(ws).unwrap_err();
@@ -468,7 +472,10 @@ mod tests {
                     name: "Terminal 1".to_string(),
                     cwd: Some("/home/user".to_string()),
                     command: None,
+                    on_connection_loss: Default::default(),
                 }],
+                preserve_panes: false,
+                workspace_id: None,
             }],
             active_tab_index: 0,
             saved_at: 0,
@@ -503,6 +510,7 @@ mod tests {
             name: "Duplicate".to_string(),
             cwd: None,
             command: None,
+            on_connection_loss: Default::default(),
         });
 
         let err = manager.save_session(&session).unwrap_err();
@@ -520,5 +528,20 @@ mod tests {
 
         std::fs::write(&session_path, "not valid json").unwrap();
         assert_eq!(manager.load_session().unwrap(), None);
+    }
+
+    #[test]
+    fn test_files_saved_before_newer_options_load_with_them_off() {
+        let mut ws = serde_json::to_value(sample_workspace()).unwrap();
+        ws.as_object_mut().unwrap().remove("preservePanes");
+        ws["panes"][0].as_object_mut().unwrap().remove("onConnectionLoss");
+        let ws: Workspace = serde_json::from_value(ws).unwrap();
+        assert!(!ws.preserve_panes);
+        assert_eq!(ws.panes[0].on_connection_loss, ConnectionLossAction::Off);
+
+        let mut session = serde_json::to_value(sample_session()).unwrap();
+        session["tabs"][0].as_object_mut().unwrap().remove("preservePanes");
+        let session: Session = serde_json::from_value(session).unwrap();
+        assert!(!session.tabs[0].preserve_panes);
     }
 }

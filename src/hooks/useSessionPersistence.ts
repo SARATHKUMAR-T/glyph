@@ -23,8 +23,11 @@ async function buildSessionTab(tab: TerminalTabModel): Promise<SessionTab> {
   const layout = converted.layout;
   // Restoring the last session after a restart must not replay startup
   // commands (a dev server, a deploy, a migration) the user never asked to
-  // run again — only explicitly opening a saved workspace does that.
-  const panes = converted.panes.map((pane) => ({ ...pane, command: null }));
+  // run again — only explicitly opening a saved workspace does that, or a
+  // tab from a workspace the user marked "Preserve Panes", whose commands
+  // are what reconnect it (an `ssh`, a `docker exec`, ...).
+  const preservePanes = tab.preservePanes ?? false;
+  const panes = preservePanes ? converted.panes : converted.panes.map((pane) => ({ ...pane, command: null }));
   const sessionIds = new Map<string, string>();
   collectPaneSessionIds(tab.rootNode, sessionIds);
 
@@ -37,29 +40,31 @@ async function buildSessionTab(tab: TerminalTabModel): Promise<SessionTab> {
     }),
   );
 
-  return { title: tab.title, layout, panes: panesWithLiveCwd };
+  return { title: tab.title, layout, panes: panesWithLiveCwd, preservePanes, workspaceId: tab.workspaceId ?? null };
 }
 
 /** Auto-saves the full open-tab state (debounced) on every structural
  * change, so `resolveInitialSession` has something to restore after a
- * crash or restart. Deliberately keyed on `tabs`/`activeTabId` only — those
+ * crash or restart. With `restoreAllTabs` off, only "Preserve Panes"
+ * workspace tabs are saved — those come back regardless of that setting. Deliberately keyed on `tabs`/`activeTabId` only — those
  * change on tab/pane add/remove/split/title updates, not on every
  * keystroke (terminal byte output never touches this React state, see
  * `GlyphEngineTerminalView`), so this doesn't fire anywhere near as often
  * as it might look. */
-export function useSessionPersistence(tabs: TerminalTabModel[], activeTabId: string, enabled: boolean) {
+export function useSessionPersistence(tabs: TerminalTabModel[], activeTabId: string, restoreAllTabs: boolean) {
   const timerRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
-    if (!enabled || !isTauriRuntime()) return;
+    if (!isTauriRuntime()) return;
 
     window.clearTimeout(timerRef.current);
     timerRef.current = window.setTimeout(() => {
       void (async () => {
-        const sessionTabs = await Promise.all(tabs.map(buildSessionTab));
+        const savedTabs = restoreAllTabs ? tabs : tabs.filter((tab) => tab.preservePanes);
+        const sessionTabs = await Promise.all(savedTabs.map(buildSessionTab));
         const activeTabIndex = Math.max(
           0,
-          tabs.findIndex((tab) => tab.clientId === activeTabId),
+          savedTabs.findIndex((tab) => tab.clientId === activeTabId),
         );
         const session: Session = {
           tabs: sessionTabs,
@@ -75,5 +80,5 @@ export function useSessionPersistence(tabs: TerminalTabModel[], activeTabId: str
     }, DEBOUNCE_MS);
 
     return () => window.clearTimeout(timerRef.current);
-  }, [tabs, activeTabId, enabled]);
+  }, [tabs, activeTabId, restoreAllTabs]);
 }

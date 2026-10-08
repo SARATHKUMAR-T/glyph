@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { splitNodeToWorkspaceLayout } from "../../lib/workspace/treeConverter";
 import { getTerminalCwd } from "../../hooks/useTerminalSession";
 import type { SplitNode, TerminalPaneModel, TerminalTabModel } from "../../lib/terminal/types";
-import type { Workspace, WorkspacePaneConfig } from "../../lib/workspace/types";
+import type { ConnectionLossAction, Workspace, WorkspacePaneConfig } from "../../lib/workspace/types";
+import { PreservePanesToggle, countStartupCommands } from "./PreservePanesToggle";
+import { ConnectionLossSelect } from "./ConnectionLossSelect";
 
 type SaveCurrentWorkspaceModalProps = {
   isOpen: boolean;
@@ -20,6 +22,7 @@ export function SaveCurrentWorkspaceModal({
   const [name, setName] = useState(activeTab.title || "Glyph Workspace");
   const [description, setDescription] = useState("");
   const [panes, setPanes] = useState<WorkspacePaneConfig[]>([]);
+  const [preservePanes, setPreservePanes] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,6 +31,9 @@ export function SaveCurrentWorkspaceModal({
       const converted = splitNodeToWorkspaceLayout(activeTab.rootNode);
       setPanes(converted.panes);
       setName(activeTab.title || "Glyph Workspace");
+      setPreservePanes(activeTab.preservePanes ?? false);
+      setDescription("");
+      setError(null);
 
       let cancelled = false;
       async function updateLiveCwds() {
@@ -75,7 +81,7 @@ export function SaveCurrentWorkspaceModal({
 
   const handlePaneChange = (
     index: number,
-    field: "name" | "cwd" | "commandStr",
+    field: "name" | "cwd" | "commandStr" | "onConnectionLoss",
     value: string,
   ) => {
     setPanes((prev) => {
@@ -87,6 +93,8 @@ export function SaveCurrentWorkspaceModal({
         pane.cwd = value || undefined;
       } else if (field === "commandStr") {
         pane.command = value;
+      } else if (field === "onConnectionLoss") {
+        pane.onConnectionLoss = value as ConnectionLossAction;
       }
       copy[index] = pane;
       return copy;
@@ -114,6 +122,7 @@ export function SaveCurrentWorkspaceModal({
           name: edited?.name || p.name,
           cwd: edited?.cwd ?? p.cwd,
           command: typeof edited?.command === "string" ? edited.command : edited?.command ?? p.command,
+          onConnectionLoss: edited?.onConnectionLoss ?? p.onConnectionLoss,
         };
       });
 
@@ -123,6 +132,7 @@ export function SaveCurrentWorkspaceModal({
         description: description.trim() || null,
         layout: converted.layout,
         panes: finalPanes,
+        preservePanes,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
@@ -181,6 +191,12 @@ export function SaveCurrentWorkspaceModal({
               />
             </div>
 
+            <PreservePanesToggle
+              value={preservePanes}
+              onChange={setPreservePanes}
+              commandCount={countStartupCommands(panes)}
+            />
+
             <div className="form-group">
               <label className="form-label">Captured Panes ({panes.length})</label>
               <div className="pane-config-list">
@@ -229,6 +245,11 @@ export function SaveCurrentWorkspaceModal({
                           placeholder="e.g. npm run dev or cargo run"
                         />
                       </div>
+                      <ConnectionLossSelect
+                        value={pane.onConnectionLoss}
+                        onChange={(value) => handlePaneChange(idx, "onConnectionLoss", value)}
+                        hasCommand={cmdStr.trim() !== ""}
+                      />
                     </div>
                   );
                 })}

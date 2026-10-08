@@ -1516,9 +1516,11 @@ dependencies = [
 
 [[package]]
 name = "glyph-terminal"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "alacritty_terminal",
+ "arboard",
+ "libc",
  "open",
  "portable-pty",
  "serde",

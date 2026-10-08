@@ -1,5 +1,5 @@
-import { createId } from "../terminal/splitTree";
-import type { SplitNode, TerminalPaneModel } from "../terminal/types";
+import { createId, updatePaneInTree } from "../terminal/splitTree";
+import type { SplitNode, TerminalPaneModel, TerminalTabModel } from "../terminal/types";
 import type { Workspace, WorkspaceLayoutNode, WorkspacePaneConfig } from "./types";
 
 /**
@@ -26,6 +26,7 @@ export function splitNodeToWorkspaceLayout(
         // Carried through so re-saving a workspace opened from a saved one
         // keeps each pane's command instead of silently blanking it.
         command: node.pane.startupCommand ?? null,
+        onConnectionLoss: node.pane.onConnectionLoss ?? "off",
       });
 
       return {
@@ -68,6 +69,7 @@ export function workspaceLayoutToSplitNode(
         title: config?.name || "Terminal",
         cwd: config?.cwd ?? undefined,
         startupCommand: config?.command ?? undefined,
+        onConnectionLoss: config?.onConnectionLoss ?? "off",
         status: "starting",
       };
       return {
@@ -87,6 +89,33 @@ export function workspaceLayoutToSplitNode(
 
   const rootNode = traverse(layout);
   return { rootNode, panesById };
+}
+
+/**
+ * Applies a just-saved workspace to an open tab linked to it: its name,
+ * Preserve Panes, and each matching pane's name, startup command and
+ * connection-loss option (a workspace's pane ids are the ids its tab's panes
+ * are opened with). Since such tabs can't be renamed inline, the workspace
+ * is the one place their names come from. Running shells and layout are
+ * left alone; a changed command takes effect the next time the pane
+ * (re)starts it.
+ */
+export function syncTabWithWorkspace(tab: TerminalTabModel, workspace: Workspace): TerminalTabModel {
+  let rootNode = tab.rootNode;
+  for (const pane of workspace.panes) {
+    rootNode = updatePaneInTree(rootNode, pane.id, {
+      title: pane.name || "Terminal",
+      startupCommand: pane.command ?? undefined,
+      onConnectionLoss: pane.onConnectionLoss ?? "off",
+    });
+  }
+  return {
+    ...tab,
+    title: workspace.name,
+    rootNode,
+    workspaceId: workspace.id,
+    preservePanes: workspace.preservePanes ?? false,
+  };
 }
 
 /**

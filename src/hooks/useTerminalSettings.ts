@@ -7,6 +7,7 @@ export type CursorStyleOption = "block" | "bar" | "underline";
 
 export type TerminalSettings = {
   themeId: ThemeId;
+  matrixEnabled: boolean;
   matrixStyle: MatrixStyle;
   matrixSpeed: MatrixSpeed;
   interactiveGlow: boolean;
@@ -21,6 +22,7 @@ export type TerminalSettings = {
 
 const DEFAULT_SETTINGS: TerminalSettings = {
   themeId: "nothing-dark",
+  matrixEnabled: true,
   matrixStyle: "matrix-rain",
   matrixSpeed: "normal",
   interactiveGlow: true,

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { readText as clipboardReadText } from "@tauri-apps/plugin-clipboard-manager";
 import { isPermissionGranted, sendNotification } from "@tauri-apps/plugin-notification";
@@ -10,7 +11,8 @@ import type { GridRenderer, SelectionRange } from "../../lib/terminal/GridRender
 import { absoluteRowToViewport, displayOffsetToReveal, viewportRowToGridLine } from "../../lib/terminal/coords";
 import { linkAt } from "../../lib/terminal/linkDetection";
 import { encodeKeyEvent } from "../../lib/terminal/keyEncoding";
-import { encodeMouseReport } from "../../lib/terminal/mouseReporting";
+import { encodeMouseReport, type MouseButton } from "../../lib/terminal/mouseReporting";
+import { readPrimarySelection, setPrimarySelection } from "../../lib/terminal/primarySelection";
 import { MouseTrackingLevel } from "../../lib/terminal/engineProtocol";
 import {
   closeTerminalSession,
@@ -23,7 +25,8 @@ import {
   writeTerminalData,
 } from "../../hooks/useTerminalSession";
 import { isTauriRuntime, listenTerminalSemantic } from "../../lib/terminal/events";
-import { matchesKeyCombo, type KeybindingsConfig } from "../../hooks/useKeybindings";
+import { useConnectionWatch, withConnectionKeepalive } from "../../hooks/useConnectionWatch";
+import { formatKeyCombo, matchesKeyCombo, type KeybindingsConfig } from "../../hooks/useKeybindings";
 import type { TerminalSettings } from "../../hooks/useTerminalSettings";
 import { formatErrorMessage, getRandomQuote } from "../../lib/supabase";
 import type {
@@ -33,7 +36,9 @@ import type {
   TerminalSessionInfo,
   TerminalStatus,
 } from "../../lib/terminal/types";
+import { InlineRename } from "../ui/InlineRename";
 import { TerminalBlock } from "./TerminalBlock";
+import { TerminalContextMenu } from "./TerminalContextMenu";
 
 export type TerminalViewProps = {
   active: boolean;
@@ -65,6 +70,7 @@ export type TerminalViewProps = {
   onSessionResize: (paneId: string, cols: number, rows: number) => void;
   onSessionStatus: (paneId: string, status: TerminalStatus, error?: string) => void;
   onTitleChange?: (paneId: string, title: string) => void;
+  onRenamePane?: (paneId: string, title: string) => void;
   isWindowMaximized?: boolean;
   onToggleSettings?: () => void;
   onSaveWorkspace?: () => void;
@@ -266,6 +272,7 @@ export function GlyphEngineTerminalView({
   onClosePane,
   onCloseSearch,
   onCloseTerminal,
+  onRenamePane,
   onExpandPane,
   onNewTerminal,
   onNewWindow,
@@ -305,6 +312,21 @@ export function GlyphEngineTerminalView({
   const [regexMode, setRegexMode] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
 
+  const connectionWatch = useConnectionWatch({
+    action: pane.onConnectionLoss ?? "off",
+    command: formatStartupCommand(pane.startupCommand),
+    getSessionId: () => sessionIdRef.current,
+    readRecentOutput: (lines) => {
+      const renderer = rendererRef.current;
+      if (!renderer) return "";
+      const { row } = renderer.getCursorPosition();
+      const text: string[] = [];
+      for (let r = Math.max(0, row - lines); r <= row; r++) text.push(renderer.getRowText(r));
+      return text.join("\n");
+    },
+    sendBytes: (bytes) => sendBytes(bytes),
+  });
+
   const imeOverlayRef = useRef<HTMLSpanElement | null>(null);
   /** Cursor cell the current IME composition started at, so the preview
    * overlay stays anchored there as the composed text changes length. */
@@ -327,10 +349,14 @@ export function GlyphEngineTerminalView({
     clientY: number;
     moved: boolean;
   } | null>(null);
-  /** True while the current press-drag-release is being forwarded to the
-   * PTY as mouse reports (a mouse-aware program has requested tracking)
-   * rather than treated as local text selection. */
-  const mouseReportingRef = useRef(false);
+  /** The button whose press-drag-release is currently being forwarded to
+   * the PTY as mouse reports (a mouse-aware program has requested
+   * tracking) rather than treated as local text selection, or null. */
+  const mouseReportingRef = useRef<MouseButton | null>(null);
+  /** Fits the grid to the host right away — set by the mount effect. */
+  const fitToHostRef = useRef<(() => void) | null>(null);
+  /** Viewport position of the open right-click menu, or null when closed. */
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; canCopy: boolean } | null>(null);
   /** Tracks click count for double/triple-click word/line selection by
    * hand, rather than trusting `PointerEvent.detail`: WebKit (the webview
    * Tauri embeds on Linux/macOS) has a long-standing bug where
@@ -420,6 +446,7 @@ export function GlyphEngineTerminalView({
         if (sessionId) {
           sessionIdRef.current = sessionId;
           onSessionStatus(pane.paneId, "running");
+          connectionWatch.resumeWatching();
         } else {
           const info = await createTerminalSession({ cols, rows, cwd: pane.cwd ?? undefined });
           if (disposed) {
@@ -434,6 +461,10 @@ export function GlyphEngineTerminalView({
           sessionIdRef.current = sessionId;
           onSessionReady(pane.paneId, info);
           startupCommand = formatStartupCommand(pane.startupCommand);
+          // A watched pane's ssh gets keepalives, so a dead server is noticed.
+          if (startupCommand && (pane.onConnectionLoss ?? "off") !== "off") {
+            startupCommand = withConnectionKeepalive(startupCommand);
+          }
         }
 
         onSessionResize(pane.paneId, cols, rows);
@@ -471,6 +502,7 @@ export function GlyphEngineTerminalView({
               void writeTerminalData(targetSessionId, `${startupCommand}\r`).catch((error: unknown) =>
                 console.error("[GlyphEngineTerminalView] startup command failed:", error),
               );
+              connectionWatch.markCommandStarted();
               return;
             }
             startupCommandTimer = window.setTimeout(typeWhenPromptIsUp, STARTUP_COMMAND_POLL_MS);
@@ -526,32 +558,42 @@ export function GlyphEngineTerminalView({
 
     void boot();
 
+    // Fits the grid to the host's current size; a no-op when it already
+    // fits. Run on the next frame by the ResizeObserver below (coalescing
+    // drag-resizes), and synchronously when the tab is shown again — see
+    // the visibility layout effect.
+    const fitToHost = () => {
+      if (disposed) return;
+      // An inactive tab's whole subtree is `display: none` (see App.tsx),
+      // which reports a zero-size box — sometimes on the way out (hiding),
+      // sometimes on the way back in for one tick before layout catches
+      // up. `computeDims` clamps to a minimum (20x5), so without this
+      // guard a tab switch would resize the session down to 20x5 and
+      // then immediately back up, a visible glitch and a real PTY
+      // SIGWINCH round trip for no reason. Matches the old xterm.js
+      // `TerminalView`'s `fitAndResize`, which had the same guard.
+      if (host.clientWidth === 0 || host.clientHeight === 0) return;
+      const { cols, rows } = computeDims();
+      if (cols === lastSizeRef.current.cols && rows === lastSizeRef.current.rows) return;
+      lastSizeRef.current = { cols, rows };
+      rendererRef.current?.setGrid(cols, rows);
+      onSessionResize(pane.paneId, cols, rows);
+      updateScrollbarThumb();
+      const sessionId = sessionIdRef.current;
+      if (sessionId) {
+        void resizeTerminalSession(sessionId, { cols, rows }).catch((error: unknown) =>
+          onSessionStatus(pane.paneId, "error", formatError(error)),
+        );
+      }
+    };
+    fitToHostRef.current = () => {
+      cancelAnimationFrame(resizeFrame);
+      fitToHost();
+    };
+
     const resizeObserver = new ResizeObserver(() => {
       cancelAnimationFrame(resizeFrame);
-      resizeFrame = requestAnimationFrame(() => {
-        if (disposed) return;
-        // An inactive tab's whole subtree is `display: none` (see App.tsx),
-        // which reports a zero-size box — sometimes on the way out (hiding),
-        // sometimes on the way back in for one tick before layout catches
-        // up. `computeDims` clamps to a minimum (20x5), so without this
-        // guard a tab switch would resize the session down to 20x5 and
-        // then immediately back up, a visible glitch and a real PTY
-        // SIGWINCH round trip for no reason. Matches the old xterm.js
-        // `TerminalView`'s `fitAndResize`, which had the same guard.
-        if (host.clientWidth === 0 || host.clientHeight === 0) return;
-        const { cols, rows } = computeDims();
-        if (cols === lastSizeRef.current.cols && rows === lastSizeRef.current.rows) return;
-        lastSizeRef.current = { cols, rows };
-        rendererRef.current?.setGrid(cols, rows);
-        onSessionResize(pane.paneId, cols, rows);
-        updateScrollbarThumb();
-        const sessionId = sessionIdRef.current;
-        if (sessionId) {
-          void resizeTerminalSession(sessionId, { cols, rows }).catch((error: unknown) =>
-            onSessionStatus(pane.paneId, "error", formatError(error)),
-          );
-        }
-      });
+      resizeFrame = requestAnimationFrame(fitToHost);
     });
     resizeObserver.observe(host);
 
@@ -604,6 +646,7 @@ export function GlyphEngineTerminalView({
       cancelAnimationFrame(resizeFrame);
       window.clearTimeout(startupCommandTimer);
       resizeObserver.disconnect();
+      fitToHostRef.current = null;
       host.removeEventListener("wheel", handleWheelNative);
       unlisteners.forEach((u) => u());
       rendererRef.current?.dispose();
@@ -615,9 +658,15 @@ export function GlyphEngineTerminalView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pane.paneId]);
 
-  useEffect(() => {
+  // A layout effect, so a tab being shown is resized and repainted before
+  // the browser draws its first frame. As a plain effect this ran after
+  // that paint, so every tab switch flashed a stale (or, for WebGL,
+  // undefined) canvas for a frame, then often another while a resize made
+  // while the tab was hidden caught up.
+  useLayoutEffect(() => {
     activeRef.current = active;
     isPaneActiveRef.current = isPaneActive;
+    if (active) fitToHostRef.current?.();
     rendererRef.current?.setVisible(active);
     rendererRef.current?.setFocused(active && isPaneActive);
     rendererRef.current?.setBlinkEnabled(active && isPaneActive && (settings?.cursorBlink ?? true));
@@ -664,6 +713,15 @@ export function GlyphEngineTerminalView({
     );
   };
 
+  const copySelection = () => {
+    if (selectedTextRef.current) void navigator.clipboard?.writeText(selectedTextRef.current);
+  };
+
+  const pasteFromClipboard = async () => {
+    const text = isTauriRuntime() ? await clipboardReadText() : await navigator.clipboard?.readText();
+    if (text) pasteText(text);
+  };
+
   const pixelToCell = (clientX: number, clientY: number): { row: number; col: number } | null => {
     const canvas = canvasRef.current;
     const renderer = rendererRef.current;
@@ -692,6 +750,7 @@ export function GlyphEngineTerminalView({
       block: sel.block,
     }).catch(() => null);
     selectedTextRef.current = text;
+    if (text) setPrimarySelection(text);
   };
 
   const clearSelection = () => {
@@ -849,25 +908,32 @@ export function GlyphEngineTerminalView({
     scrollbarDragRef.current = null;
   };
 
+  /** Whether a press should go to the running program as a mouse report
+   * rather than act locally. Holding Shift always bypasses reporting,
+   * matching xterm's own convention, so users aren't locked out of
+   * selecting, pasting or the context menu inside e.g. htop. */
+  const isReportingMouse = (event: { shiftKey: boolean }) =>
+    !event.shiftKey && (rendererRef.current?.getMouseMode().tracking ?? MouseTrackingLevel.Off) !== MouseTrackingLevel.Off;
+
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (event.button !== 0) return;
+    const button: MouseButton | null =
+      event.button === 0 ? "left" : event.button === 1 ? "middle" : event.button === 2 ? "right" : null;
+    if (!button) return;
     const renderer = rendererRef.current;
     const cell = pixelToCell(event.clientX, event.clientY);
     if (!renderer || !cell) return;
     inputRef.current?.focus();
     event.currentTarget.setPointerCapture(event.pointerId);
 
-    // A mouse-aware program gets first refusal on left-button presses,
-    // ahead of local double/triple-click word/line selection (the
-    // reporting protocol has no concept of click count — every click just
-    // reports a single left-button press). Holding Shift bypasses this and
-    // forces local selection, matching xterm's own convention, so users
-    // aren't locked out of copying text inside e.g. htop.
+    // A mouse-aware program gets first refusal on presses, ahead of local
+    // double/triple-click word/line selection (the reporting protocol has
+    // no concept of click count — every click just reports a single
+    // press), middle-click paste and the right-click menu.
     const mouseMode = renderer.getMouseMode();
-    if (mouseMode.tracking !== MouseTrackingLevel.Off && !event.shiftKey) {
+    if (isReportingMouse(event)) {
       const report = encodeMouseReport(
         {
-          button: "left",
+          button,
           row: cell.row,
           col: cell.col,
           modifiers: { shift: event.shiftKey, alt: event.altKey, ctrl: event.ctrlKey },
@@ -877,12 +943,23 @@ export function GlyphEngineTerminalView({
       );
       if (report) {
         sendBytes(report);
-        mouseReportingRef.current = true;
+        mouseReportingRef.current = button;
         dragRef.current = null;
         return;
       }
     }
-    mouseReportingRef.current = false;
+    mouseReportingRef.current = null;
+
+    // Middle-click pastes the PRIMARY selection — whatever was last
+    // selected, here or in another app — like every Linux terminal.
+    if (button === "middle") {
+      event.preventDefault();
+      void readPrimarySelection().then(pasteText);
+      return;
+    }
+    // Right-click leaves the selection alone; the `contextmenu` event that
+    // follows opens the Copy/Paste menu.
+    if (button === "right") return;
 
     const now = event.timeStamp;
     const lastClick = clickTrackRef.current;
@@ -934,7 +1011,7 @@ export function GlyphEngineTerminalView({
       const mouseMode = renderer.getMouseMode();
       const report = encodeMouseReport(
         {
-          button: "left",
+          button: mouseReportingRef.current,
           row: cell.row,
           col: cell.col,
           modifiers: { shift: event.shiftKey, alt: event.altKey, ctrl: event.ctrlKey },
@@ -988,12 +1065,10 @@ export function GlyphEngineTerminalView({
   };
 
   const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    const drag = dragRef.current;
-    dragRef.current = null;
     const renderer = rendererRef.current;
 
     if (mouseReportingRef.current) {
-      mouseReportingRef.current = false;
+      mouseReportingRef.current = null;
       const cell = pixelToCell(event.clientX, event.clientY);
       if (renderer && cell) {
         const mouseMode = renderer.getMouseMode();
@@ -1012,6 +1087,12 @@ export function GlyphEngineTerminalView({
       return;
     }
 
+    // Only the left button selects, opens links or clears the selection —
+    // releasing a middle- or right-click must keep what's selected.
+    if (event.button !== 0) return;
+    const drag = dragRef.current;
+    dragRef.current = null;
+
     if (drag && drag.moved && renderer) {
       const cell = pixelToCell(event.clientX, event.clientY) ?? { row: drag.row, col: drag.col };
       const sel: SelectionRange = { startRow: drag.row, startCol: drag.col, endRow: cell.row, endCol: cell.col, block: drag.block };
@@ -1028,6 +1109,13 @@ export function GlyphEngineTerminalView({
       return;
     }
     clearSelection();
+  };
+
+  const handleContextMenu = (event: React.MouseEvent<HTMLCanvasElement>) => {
+    event.preventDefault();
+    // A mouse-aware program already got this right-click as a report.
+    if (isReportingMouse(event)) return;
+    setContextMenu({ x: event.clientX, y: event.clientY, canCopy: Boolean(selectedTextRef.current) });
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1049,17 +1137,12 @@ export function GlyphEngineTerminalView({
 
     if (keybindings && matchesKeyCombo(event.nativeEvent, keybindings.copy)) {
       event.preventDefault();
-      if (selectedTextRef.current) {
-        void navigator.clipboard?.writeText(selectedTextRef.current);
-      }
+      copySelection();
       return;
     }
     if (keybindings?.paste && matchesKeyCombo(event.nativeEvent, keybindings.paste)) {
       event.preventDefault();
-      void (async () => {
-        const text = isTauriRuntime() ? await clipboardReadText() : await navigator.clipboard?.readText();
-        if (text) pasteText(text);
-      })();
+      void pasteFromClipboard();
       return;
     }
 
@@ -1147,10 +1230,7 @@ export function GlyphEngineTerminalView({
     const shiftOnly = event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey;
     if (shiftOnly && event.key === "Insert") {
       event.preventDefault();
-      void (async () => {
-        const text = isTauriRuntime() ? await clipboardReadText() : await navigator.clipboard?.readText();
-        if (text) pasteText(text);
-      })();
+      void pasteFromClipboard();
       return;
     }
     if (shiftOnly && (event.key === "PageUp" || event.key === "PageDown")) {
@@ -1350,17 +1430,33 @@ export function GlyphEngineTerminalView({
       <div className="pane-header-bar">
         <div className="pane-header-left">
           <span className={`pane-status-dot pane-status-${pane.status}`} aria-hidden="true" />
-          <span
-            style={{
-              fontSize: "11px",
-              fontWeight: 600,
-              letterSpacing: "0.5px",
-              color: "var(--nothing-gray-100)",
-              textTransform: "uppercase",
-            }}
-          >
-            {pane.title ?? "engine preview"}
-          </span>
+          {onRenamePane ? (
+            <InlineRename
+              value={pane.title ?? "engine preview"}
+              label="Rename Pane"
+              textStyle={{
+                fontSize: "11px",
+                fontWeight: 600,
+                letterSpacing: "0.5px",
+                color: "var(--nothing-gray-100)",
+                textTransform: "uppercase",
+              }}
+              onCommit={(title) => onRenamePane(pane.paneId, title)}
+              onFinish={() => inputRef.current?.focus()}
+            />
+          ) : (
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                letterSpacing: "0.5px",
+                color: "var(--nothing-gray-100)",
+                textTransform: "uppercase",
+              }}
+            >
+              {pane.title ?? "engine preview"}
+            </span>
+          )}
         </div>
         <div className="pane-header-controls">
           {isSplit && !isExpanded && isWindowMaximized && (
@@ -1453,6 +1549,39 @@ export function GlyphEngineTerminalView({
       )}
 
       <section className="terminal-output" aria-label="Terminal stream (Rust engine preview)">
+        {connectionWatch.notice && (
+          <div
+            className={`connection-notice is-${connectionWatch.notice.tone}`}
+            role="status"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={keepTerminalFocus}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+              <line x1="12" y1="9" x2="12" y2="13" />
+              <line x1="12" y1="17" x2="12.01" y2="17" />
+            </svg>
+            <span className="connection-notice-text">{connectionWatch.notice.message}</span>
+            {connectionWatch.notice.canRestart && (
+              <button type="button" className="connection-notice-btn" tabIndex={-1} onClick={connectionWatch.restart}>
+                Restart
+              </button>
+            )}
+            <button
+              type="button"
+              className="connection-notice-close"
+              tabIndex={-1}
+              title="Dismiss"
+              aria-label="Dismiss"
+              onClick={connectionWatch.dismiss}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        )}
         {searchOpen && isPaneActive && (
           <div
             className="terminal-search"
@@ -1555,6 +1684,7 @@ export function GlyphEngineTerminalView({
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
+            onContextMenu={handleContextMenu}
           />
           <textarea
             ref={inputRef}
@@ -1588,6 +1718,23 @@ export function GlyphEngineTerminalView({
           </div>
         </div>
       </section>
+      {contextMenu &&
+        createPortal(
+          <TerminalContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            canCopy={contextMenu.canCopy}
+            copyShortcut={keybindings ? formatKeyCombo(keybindings.copy) : undefined}
+            pasteShortcut={keybindings?.paste ? formatKeyCombo(keybindings.paste) : undefined}
+            onCopy={copySelection}
+            onPaste={() => void pasteFromClipboard()}
+            onClose={() => {
+              setContextMenu(null);
+              inputRef.current?.focus();
+            }}
+          />,
+          document.body,
+        )}
     </div>
   );
 }

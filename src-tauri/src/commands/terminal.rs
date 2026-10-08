@@ -43,6 +43,27 @@ pub fn paste_terminal(
         .map_err(Into::into)
 }
 
+/// See `TerminalManager::foreground_command`.
+#[tauri::command(rename_all = "camelCase", async)]
+pub fn terminal_foreground_command(
+    manager: State<'_, TerminalManager>,
+    session_id: String,
+) -> Result<Option<String>, TerminalErrorPayload> {
+    manager.foreground_command(&session_id).map_err(Into::into)
+}
+
+/// See `TerminalManager::stop_foreground_job`.
+#[tauri::command(rename_all = "camelCase", async)]
+pub fn terminal_stop_foreground(
+    manager: State<'_, TerminalManager>,
+    session_id: String,
+    force: bool,
+) -> Result<(), TerminalErrorPayload> {
+    manager
+        .stop_foreground_job(&session_id, force)
+        .map_err(Into::into)
+}
+
 #[tauri::command(rename_all = "camelCase", async)]
 pub fn resize_terminal(
     app: AppHandle,
@@ -86,3 +107,16 @@ pub fn open_url(url: String) -> Result<(), String> {
     open::that(&url).map_err(|e| e.to_string())
 }
 
+/// How many terminals have a program running in them; the close-confirmation
+/// modal only appears when this is non-zero.
+#[tauri::command(rename_all = "camelCase")]
+pub fn running_process_count(manager: State<'_, TerminalManager>) -> usize {
+    manager.running_process_count()
+}
+
+/// Kills every terminal and exits the app.
+#[tauri::command(rename_all = "camelCase", async)]
+pub fn quit_app(app: AppHandle, manager: State<'_, TerminalManager>) {
+    manager.close_all(&app);
+    app.exit(0);
+}

@@ -811,3 +811,141 @@
 .expanded-placeholder-content svg {
   color: var(--glyph-accent);
 }
+
+.pane-header-left {
+  min-width: 0;
+}
+
+.pane-header-left .inline-rename-input {
+  width: 170px;
+}
+
+/* Right-click menu on the terminal canvas (TerminalContextMenu). Portaled
+   to <body> and positioned at the pointer, so it's `fixed`. */
+.terminal-context-menu {
+  position: fixed;
+  z-index: 100000;
+  min-width: 200px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 36px var(--glyph-shadow);
+}
+
+.terminal-context-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  padding: 7px 10px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  color: var(--glyph-fg);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+
+.terminal-context-item kbd {
+  font-family: inherit;
+  font-size: 10px;
+  color: var(--glyph-fg-muted);
+}
+
+.terminal-context-item:hover:not(:disabled) {
+  background: var(--glyph-accent-dim);
+  border-color: var(--glyph-accent);
+}
+
+.terminal-context-item:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Connection-loss notice at the top of a workspace pane (useConnectionWatch).
+   Overlaid rather than in the flow, so showing it never resizes the grid. */
+.connection-notice {
+  position: absolute;
+  top: 10px;
+  left: 18px;
+  right: 18px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 6px 6px 6px 12px;
+  border: 1px solid var(--glyph-line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--glyph-surface-raised);
+  box-shadow: 0 12px 32px var(--glyph-shadow);
+  color: var(--glyph-fg);
+  font-size: 12px;
+}
+
+.connection-notice.is-warning {
+  border-color: var(--glyph-warning);
+}
+
+.connection-notice.is-warning > svg {
+  color: var(--glyph-warning);
+  flex-shrink: 0;
+}
+
+.connection-notice.is-info > svg {
+  color: var(--glyph-fg-muted);
+  flex-shrink: 0;
+}
+
+.connection-notice-text {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.connection-notice-btn {
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 12px;
+  border: 1px solid var(--glyph-warning);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--glyph-fg);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+
+.connection-notice-btn:hover {
+  background: var(--glyph-warning);
+  color: var(--glyph-bg, #000);
+}
+
+.connection-notice-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--glyph-fg-muted);
+  cursor: pointer;
+}
+
+.connection-notice-close:hover {
+  color: var(--glyph-fg);
+  background: var(--glyph-accent-dim);
+}

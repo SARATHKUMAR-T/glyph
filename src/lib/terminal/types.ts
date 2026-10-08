@@ -19,6 +19,8 @@ export type TerminalPaneModel = {
   error?: string;
   title?: string;
   startupCommand?: string | { program: string; args: string[] } | null;
+  /** See `WorkspacePaneConfig.onConnectionLoss`. */
+  onConnectionLoss?: "off" | "warn" | "restart";
 };
 
 export type SplitDirection = "vertical" | "horizontal";
@@ -41,6 +43,14 @@ export type TerminalTabModel = {
   title: string;
   rootNode: SplitNode;
   activePaneId: string;
+  /** Opened from a workspace with "Preserve Panes" on: the tab survives a
+   * restart even with "Restore Tabs on Restart" off, and its panes re-run
+   * their startup commands when it comes back. */
+  preservePanes?: boolean;
+  /** The saved workspace this tab was opened from (or saved as), so later
+   * edits to that workspace's settings reach the already-open tab — see
+   * `syncTabWithWorkspace`. */
+  workspaceId?: string;
 };
 
 export type TerminalOutputEvent = {

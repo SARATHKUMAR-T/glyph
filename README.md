@@ -17,21 +17,26 @@ cursors to remappable shortcuts and split panes.
 
 ------------------------------------------------------------------------
 
-## 🆕 What's New in v0.5.0
+## 🆕 What's New in v0.6.0
 
-**Performance**
+**Workspaces**
 
--   Terminal commands no longer run on the UI thread, so opening workspaces and typing stay responsive
--   Output is delivered only when something changes, at most one frame per 16ms
--   Rewritten dot-matrix background: static grid drawn once, animated styles at 30fps and paused when hidden
--   Renderer repaints on demand, skips hidden tabs, reuses buffers and uses a smaller glyph atlas
--   Panes no longer all re-render on every resize or status update
--   Faster startup and LTO-optimized release builds
+-   **Preserve Panes**: a workspace can reopen on launch and re-run each pane's startup command, reconnecting `ssh`, `docker exec` and similar sessions
+-   **If the Connection Drops** (per pane): show a warning with a Restart button, or restart the command automatically once the network is back
+-   Edits in Manage Workspaces apply to open tabs right away
+
+**Terminal**
+
+-   Middle-click pastes your current selection, shared with other apps, like a standard Linux terminal
+-   Right-click menu with Copy and Paste
+-   Rename tabs and panes inline with a pencil button or a double-click
+-   Glyph asks before closing the window while programs are still running
 
 **Fixes**
 
--   Esc closes an enlarged pane again, even while its terminal has focus
--   Window buttons (minimize, maximize, close) no longer take focus or show a focus ring
+-   Switching tabs no longer flashes a distorted, zoomed-in terminal or stutters
+-   Right- and middle-clicks no longer clear the current selection
+-   The New Workspace form starts fresh after saving
 
 ------------------------------------------------------------------------
 
@@ -61,7 +66,7 @@ side-by-side without constantly switching windows.
 
 ### 🗂️ Workspaces
 
-Save and reopen your entire development environment with one click. Workspaces persist pane split layouts, working directories (CWD), custom pane titles, and automatic startup commands (e.g. `npm run dev`, `cargo run`).
+Save and reopen your entire development environment with one click. Workspaces persist pane split layouts, working directories (CWD), custom pane titles, and automatic startup commands (e.g. `npm run dev`, `cargo run`). Turn on **Preserve Panes** to bring a workspace back every time Glyph starts, and choose per pane what happens if a command loses its network connection: a warning with a Restart button, or an automatic restart.
 
 ### 📑 Multiple Tabs
 

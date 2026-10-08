@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { buildNPaneLayout, createPresetWorkspaceLayout } from "../../lib/workspace/treeConverter";
 import { createId } from "../../lib/terminal/splitTree";
-import type { Workspace, WorkspacePaneConfig } from "../../lib/workspace/types";
+import type { ConnectionLossAction, Workspace, WorkspacePaneConfig } from "../../lib/workspace/types";
+import { PreservePanesToggle, countStartupCommands } from "./PreservePanesToggle";
+import { ConnectionLossSelect } from "./ConnectionLossSelect";
 
 type CreateWorkspaceModalProps = {
   isOpen: boolean;
@@ -11,17 +13,33 @@ type CreateWorkspaceModalProps = {
 
 type PresetType = "single" | "two-vertical" | "two-horizontal" | "four-grid" | "custom";
 
+const DEFAULT_NAME = "Glyph Development";
+const DEFAULT_PRESET = "four-grid";
+
 export function CreateWorkspaceModal({ isOpen, onClose, onSave }: CreateWorkspaceModalProps) {
-  const [name, setName] = useState("Glyph Development");
+  const [name, setName] = useState(DEFAULT_NAME);
   const [description, setDescription] = useState("");
-  const [preset, setPreset] = useState<PresetType>("four-grid");
+  const [preset, setPreset] = useState<PresetType>(DEFAULT_PRESET);
   const [panes, setPanes] = useState<WorkspacePaneConfig[]>(() => {
-    return createPresetWorkspaceLayout("four-grid", "Glyph Development").panes;
+    return createPresetWorkspaceLayout(DEFAULT_PRESET, DEFAULT_NAME).panes;
   });
+  const [preservePanes, setPreservePanes] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  // The dialog stays mounted between openings, so a saved workspace's
+  // details would otherwise still be filled in the next time it opens.
+  // Cancelling keeps the draft; only a successful save starts fresh.
+  const resetForm = () => {
+    setName(DEFAULT_NAME);
+    setDescription("");
+    setPreset(DEFAULT_PRESET);
+    setPanes(createPresetWorkspaceLayout(DEFAULT_PRESET, DEFAULT_NAME).panes);
+    setPreservePanes(false);
+    setError(null);
+  };
 
   const handlePresetChange = (newPreset: PresetType) => {
     setPreset(newPreset);
@@ -51,7 +69,7 @@ export function CreateWorkspaceModal({ isOpen, onClose, onSave }: CreateWorkspac
 
   const handlePaneChange = (
     index: number,
-    field: "name" | "cwd" | "commandStr",
+    field: "name" | "cwd" | "commandStr" | "onConnectionLoss",
     value: string,
   ) => {
     setPanes((prev) => {
@@ -63,6 +81,8 @@ export function CreateWorkspaceModal({ isOpen, onClose, onSave }: CreateWorkspac
         pane.cwd = value || undefined;
       } else if (field === "commandStr") {
         pane.command = value;
+      } else if (field === "onConnectionLoss") {
+        pane.onConnectionLoss = value as ConnectionLossAction;
       }
       copy[index] = pane;
       return copy;
@@ -100,12 +120,14 @@ export function CreateWorkspaceModal({ isOpen, onClose, onSave }: CreateWorkspac
         description: description.trim() || null,
         layout,
         panes: finalPanes,
+        preservePanes,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
 
       await onSave(newWorkspace);
       setIsSubmitting(false);
+      resetForm();
       onClose();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -157,6 +179,12 @@ export function CreateWorkspaceModal({ isOpen, onClose, onSave }: CreateWorkspac
                 placeholder="e.g. Fullstack environment"
               />
             </div>
+
+            <PreservePanesToggle
+              value={preservePanes}
+              onChange={setPreservePanes}
+              commandCount={countStartupCommands(panes)}
+            />
 
             <div className="form-group">
               <label className="form-label">Layout Presets</label>
@@ -280,6 +308,11 @@ export function CreateWorkspaceModal({ isOpen, onClose, onSave }: CreateWorkspac
                           placeholder="e.g. npm run dev or cargo run"
                         />
                       </div>
+                      <ConnectionLossSelect
+                        value={pane.onConnectionLoss}
+                        onChange={(value) => handlePaneChange(idx, "onConnectionLoss", value)}
+                        hasCommand={cmdStr.trim() !== ""}
+                      />
                     </div>
                   );
                 })}
