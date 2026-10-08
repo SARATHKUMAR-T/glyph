@@ -12,7 +12,7 @@ import {
   type DecodedFrame,
   type MouseMode,
 } from "./engineProtocol";
-import type { GridRenderer, SelectionRange } from "./GridRenderer";
+import { resizeCells, type GridRenderer, type SelectionRange } from "./GridRenderer";
 import { parseCssColorToFloat, pickReadableColor, rgbaToCss } from "./contrast";
 
 interface RendererOptions {
@@ -88,6 +88,7 @@ export class CanvasGridRenderer implements GridRenderer {
    * canvas + local grid mirror. Call before the first frame and whenever
    * cols/rows/fontSize change. */
   setGrid(cols: number, rows: number) {
+    const { cols: oldCols, rows: oldRows } = this;
     this.cols = cols;
     this.rows = rows;
     this.dpr = window.devicePixelRatio || 1;
@@ -107,8 +108,8 @@ export class CanvasGridRenderer implements GridRenderer {
     this.canvas.style.height = `${rows * this.cellHeight}px`;
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
 
-    this.grid = new Array(cols * rows).fill(BLANK_CELL);
-    this.text = new Array(cols * rows).fill(" ");
+    this.grid = resizeCells(this.grid, oldCols, oldRows, cols, rows, BLANK_CELL);
+    this.text = resizeCells(this.text, oldCols, oldRows, cols, rows, " ");
     this.paintAll();
   }
 

@@ -10,7 +10,7 @@ import {
   type DecodedFrame,
   type MouseMode,
 } from "./engineProtocol";
-import type { GridRenderer, SelectionRange } from "./GridRenderer";
+import { resizeCells, type GridRenderer, type SelectionRange } from "./GridRenderer";
 import { measureCellMetrics } from "./CanvasGridRenderer";
 import { pickReadableColor } from "./contrast";
 import { GlyphAtlas } from "./webgl/glyphAtlas";
@@ -314,6 +314,7 @@ export class WebGL2GridRenderer implements GridRenderer {
   }
 
   setGrid(cols: number, rows: number) {
+    const { cols: oldCols, rows: oldRows } = this;
     this.cols = cols;
     this.rows = rows;
     this.dpr = window.devicePixelRatio || 1;
@@ -324,8 +325,8 @@ export class WebGL2GridRenderer implements GridRenderer {
     this.canvas.style.height = `${rows * this.cellHeight}px`;
     this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
 
-    this.grid = new Array(cols * rows).fill(BLANK_CELL);
-    this.text = new Array(cols * rows).fill(" ");
+    this.grid = resizeCells(this.grid, oldCols, oldRows, cols, rows, BLANK_CELL);
+    this.text = resizeCells(this.text, oldCols, oldRows, cols, rows, " ");
     this.bgBuf = new Float32Array(cols * rows * SOLID_STRIDE);
     this.glyphBuf = new Float32Array(cols * rows * GLYPH_STRIDE);
     this.markDirty();
@@ -511,7 +512,18 @@ export class WebGL2GridRenderer implements GridRenderer {
   setVisible(visible: boolean) {
     if (this.visible === visible) return;
     this.visible = visible;
-    if (visible) this.markDirty();
+    if (!visible || this.disposed) return;
+    // Paint now rather than on the next animation frame. WebGL doesn't
+    // keep the drawing buffer once it has been presented, so a canvas
+    // coming back from `display: none` would otherwise be shown for a frame
+    // with undefined contents — on WebKitGTK typically a stretched piece of
+    // some other texture, which reads as a "zoomed in" terminal flashing
+    // up on every tab switch. Callers make this call before the browser
+    // paints (see `GlyphEngineTerminalView`'s visibility layout effect).
+    cancelAnimationFrame(this.rafHandle);
+    this.rafScheduled = false;
+    this.dirty = false;
+    this.draw();
   }
 
   private resolvedBg(cell: DecodedCell): number {

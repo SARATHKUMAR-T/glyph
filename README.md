@@ -34,6 +34,7 @@ cursors to remappable shortcuts and split panes.
 
 **Fixes**
 
+-   Switching tabs no longer flashes a distorted, zoomed-in terminal or stutters
 -   Right- and middle-clicks no longer clear the current selection
 -   The New Workspace form starts fresh after saving
 

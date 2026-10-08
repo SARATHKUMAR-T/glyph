@@ -73,3 +73,26 @@ export interface GridRenderer {
   setSelection(range: SelectionRange | null): void;
   dispose(): void;
 }
+
+/** Copies a cols×rows cell mirror into a newly sized one, keeping the
+ * overlapping top-left region and filling the rest with `blank`. Used on a
+ * resize so the old text stays on screen until the engine's frame for the
+ * new size arrives, instead of the grid flashing blank in between. */
+export function resizeCells<T>(
+  cells: T[],
+  oldCols: number,
+  oldRows: number,
+  cols: number,
+  rows: number,
+  blank: T,
+): T[] {
+  const next = new Array<T>(cols * rows).fill(blank);
+  const keepCols = Math.min(cols, oldCols);
+  const keepRows = Math.min(rows, oldRows);
+  for (let row = 0; row < keepRows; row++) {
+    for (let col = 0; col < keepCols; col++) {
+      next[row * cols + col] = cells[row * oldCols + col];
+    }
+  }
+  return next;
+}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import { readText as clipboardReadText } from "@tauri-apps/plugin-clipboard-manager";
@@ -353,6 +353,8 @@ export function GlyphEngineTerminalView({
    * the PTY as mouse reports (a mouse-aware program has requested
    * tracking) rather than treated as local text selection, or null. */
   const mouseReportingRef = useRef<MouseButton | null>(null);
+  /** Fits the grid to the host right away — set by the mount effect. */
+  const fitToHostRef = useRef<(() => void) | null>(null);
   /** Viewport position of the open right-click menu, or null when closed. */
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; canCopy: boolean } | null>(null);
   /** Tracks click count for double/triple-click word/line selection by
@@ -556,32 +558,42 @@ export function GlyphEngineTerminalView({
 
     void boot();
 
+    // Fits the grid to the host's current size; a no-op when it already
+    // fits. Run on the next frame by the ResizeObserver below (coalescing
+    // drag-resizes), and synchronously when the tab is shown again — see
+    // the visibility layout effect.
+    const fitToHost = () => {
+      if (disposed) return;
+      // An inactive tab's whole subtree is `display: none` (see App.tsx),
+      // which reports a zero-size box — sometimes on the way out (hiding),
+      // sometimes on the way back in for one tick before layout catches
+      // up. `computeDims` clamps to a minimum (20x5), so without this
+      // guard a tab switch would resize the session down to 20x5 and
+      // then immediately back up, a visible glitch and a real PTY
+      // SIGWINCH round trip for no reason. Matches the old xterm.js
+      // `TerminalView`'s `fitAndResize`, which had the same guard.
+      if (host.clientWidth === 0 || host.clientHeight === 0) return;
+      const { cols, rows } = computeDims();
+      if (cols === lastSizeRef.current.cols && rows === lastSizeRef.current.rows) return;
+      lastSizeRef.current = { cols, rows };
+      rendererRef.current?.setGrid(cols, rows);
+      onSessionResize(pane.paneId, cols, rows);
+      updateScrollbarThumb();
+      const sessionId = sessionIdRef.current;
+      if (sessionId) {
+        void resizeTerminalSession(sessionId, { cols, rows }).catch((error: unknown) =>
+          onSessionStatus(pane.paneId, "error", formatError(error)),
+        );
+      }
+    };
+    fitToHostRef.current = () => {
+      cancelAnimationFrame(resizeFrame);
+      fitToHost();
+    };
+
     const resizeObserver = new ResizeObserver(() => {
       cancelAnimationFrame(resizeFrame);
-      resizeFrame = requestAnimationFrame(() => {
-        if (disposed) return;
-        // An inactive tab's whole subtree is `display: none` (see App.tsx),
-        // which reports a zero-size box — sometimes on the way out (hiding),
-        // sometimes on the way back in for one tick before layout catches
-        // up. `computeDims` clamps to a minimum (20x5), so without this
-        // guard a tab switch would resize the session down to 20x5 and
-        // then immediately back up, a visible glitch and a real PTY
-        // SIGWINCH round trip for no reason. Matches the old xterm.js
-        // `TerminalView`'s `fitAndResize`, which had the same guard.
-        if (host.clientWidth === 0 || host.clientHeight === 0) return;
-        const { cols, rows } = computeDims();
-        if (cols === lastSizeRef.current.cols && rows === lastSizeRef.current.rows) return;
-        lastSizeRef.current = { cols, rows };
-        rendererRef.current?.setGrid(cols, rows);
-        onSessionResize(pane.paneId, cols, rows);
-        updateScrollbarThumb();
-        const sessionId = sessionIdRef.current;
-        if (sessionId) {
-          void resizeTerminalSession(sessionId, { cols, rows }).catch((error: unknown) =>
-            onSessionStatus(pane.paneId, "error", formatError(error)),
-          );
-        }
-      });
+      resizeFrame = requestAnimationFrame(fitToHost);
     });
     resizeObserver.observe(host);
 
@@ -634,6 +646,7 @@ export function GlyphEngineTerminalView({
       cancelAnimationFrame(resizeFrame);
       window.clearTimeout(startupCommandTimer);
       resizeObserver.disconnect();
+      fitToHostRef.current = null;
       host.removeEventListener("wheel", handleWheelNative);
       unlisteners.forEach((u) => u());
       rendererRef.current?.dispose();
@@ -645,9 +658,15 @@ export function GlyphEngineTerminalView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pane.paneId]);
 
-  useEffect(() => {
+  // A layout effect, so a tab being shown is resized and repainted before
+  // the browser draws its first frame. As a plain effect this ran after
+  // that paint, so every tab switch flashed a stale (or, for WebGL,
+  // undefined) canvas for a frame, then often another while a resize made
+  // while the tab was hidden caught up.
+  useLayoutEffect(() => {
     activeRef.current = active;
     isPaneActiveRef.current = isPaneActive;
+    if (active) fitToHostRef.current?.();
     rendererRef.current?.setVisible(active);
     rendererRef.current?.setFocused(active && isPaneActive);
     rendererRef.current?.setBlinkEnabled(active && isPaneActive && (settings?.cursorBlink ?? true));
