@@ -10,11 +10,13 @@ use commands::engine::{
     engine_search, engine_selection_range, engine_set_cursor_style, engine_set_palette,
     engine_set_scroll,
 };
+use commands::selection::{get_primary_selection, set_primary_selection, PrimarySelectionState};
 use commands::session::{clear_session, load_session, save_session};
 use commands::system::{get_system_perf_stats, SystemMonitorState};
 use commands::terminal::{
     close_terminal, create_terminal, get_terminal_cwd, list_sessions, open_url, paste_terminal,
-    quit_app, resize_terminal, running_process_count, write_terminal,
+    quit_app, resize_terminal, running_process_count, terminal_foreground_command,
+    terminal_stop_foreground, write_terminal,
 };
 use commands::workspace::{delete_workspace, get_workspace, get_workspaces, save_workspace};
 use tauri::Manager;
@@ -35,6 +37,7 @@ pub fn run() {
         .manage(TerminalManager::default())
         .manage(EngineManager::default())
         .manage(SystemMonitorState::default())
+        .manage(PrimarySelectionState::default())
         .manage(workspace_manager)
         .invoke_handler(tauri::generate_handler![
             create_terminal,
@@ -43,6 +46,8 @@ pub fn run() {
             resize_terminal,
             close_terminal,
             running_process_count,
+            terminal_foreground_command,
+            terminal_stop_foreground,
             quit_app,
             list_sessions,
             get_terminal_cwd,
@@ -61,6 +66,8 @@ pub fn run() {
             engine_feed_local,
             engine_set_palette,
             engine_set_cursor_style,
+            set_primary_selection,
+            get_primary_selection,
             save_session,
             load_session,
             clear_session

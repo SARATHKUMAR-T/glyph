@@ -30,7 +30,7 @@ import { getTerminalCwd, writeTerminalData } from "../hooks/useTerminalSession";
 import { useUpdateChecker } from "../hooks/useUpdateChecker";
 import { buildUpdateCommand } from "../lib/update/updateCommand";
 import { encodeKeyEvent, isTabKey } from "../lib/terminal/keyEncoding";
-import { workspaceLayoutToSplitNode } from "../lib/workspace/treeConverter";
+import { syncTabWithWorkspace, workspaceLayoutToSplitNode } from "../lib/workspace/treeConverter";
 import type { Workspace } from "../lib/workspace/types";
 import {
   createId,
@@ -102,6 +102,8 @@ export function App({ initialSession }: AppProps) {
       title: workspace.name,
       rootNode,
       activePaneId: panes[0]?.paneId || createId(),
+      preservePanes: workspace.preservePanes ?? false,
+      workspaceId: workspace.id,
     };
 
     setTabs((current) => [...current, newTab]);
@@ -112,6 +114,42 @@ export function App({ initialSession }: AppProps) {
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.clientId === activeTabId) ?? tabs[0],
     [activeTabId, tabs],
+  );
+
+  // Saving a workspace also updates the open tabs linked to it, so a
+  // changed Preserve Panes or connection-loss option applies right away
+  // instead of only after the workspace is reopened.
+  const saveWorkspaceAndSyncTabs = useCallback(
+    async (workspace: Workspace) => {
+      const saved = await saveWorkspace(workspace);
+      setTabs((current) => current.map((tab) => (tab.workspaceId === saved.id ? syncTabWithWorkspace(tab, saved) : tab)));
+      return saved;
+    },
+    [saveWorkspace],
+  );
+
+  // Deleting a workspace unlinks its open tabs, which become ordinary tabs
+  // again: renamable, and no longer restored on launch.
+  const deleteWorkspaceAndUnlinkTabs = useCallback(
+    async (id: string) => {
+      await deleteWorkspace(id);
+      setTabs((current) =>
+        current.map((tab) => (tab.workspaceId === id ? { ...tab, workspaceId: undefined, preservePanes: false } : tab)),
+      );
+    },
+    [deleteWorkspace],
+  );
+
+  // "Save Current Workspace" links the tab it was saved from to the new
+  // workspace, picking up the options chosen in the dialog.
+  const saveActiveTabAsWorkspace = useCallback(
+    async (workspace: Workspace) => {
+      const saved = await saveWorkspace(workspace);
+      const tabId = activeTab.clientId;
+      setTabs((current) => current.map((tab) => (tab.clientId === tabId ? syncTabWithWorkspace(tab, saved) : tab)));
+      return saved;
+    },
+    [saveWorkspace, activeTab.clientId],
   );
 
   const {
@@ -706,7 +744,8 @@ export function App({ initialSession }: AppProps) {
                   onSplitHorizontal={(paneId) => void splitActiveTerminal("horizontal", paneId)}
                   onSplitVertical={(paneId) => void splitActiveTerminal("vertical", paneId)}
                   onTitleChange={handleTitleChange}
-                  onRenamePane={handleRenamePane}
+                  // Saved workspaces name their panes in Manage Workspaces.
+                  onRenamePane={tab.workspaceId ? undefined : handleRenamePane}
                   onToggleSettings={() => setSettingsOpen((open) => !open)}
                   onSaveWorkspace={() => {
                     setSaveCurrentWorkspaceOpen(true);
@@ -806,15 +845,15 @@ export function App({ initialSession }: AppProps) {
           isOpen={saveCurrentWorkspaceOpen}
           activeTab={activeTab}
           onClose={() => setSaveCurrentWorkspaceOpen(false)}
-          onSave={saveWorkspace}
+          onSave={saveActiveTabAsWorkspace}
         />
         <WorkspaceManagerModal
           isOpen={manageWorkspacesOpen}
           workspaces={workspaces}
           onClose={() => setManageWorkspacesOpen(false)}
           onOpenWorkspace={handleOpenWorkspace}
-          onSaveWorkspace={saveWorkspace}
-          onDeleteWorkspace={deleteWorkspace}
+          onSaveWorkspace={saveWorkspaceAndSyncTabs}
+          onDeleteWorkspace={deleteWorkspaceAndUnlinkTabs}
         />
       </main>
     </div>

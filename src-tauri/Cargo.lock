@@ -1519,6 +1519,8 @@ name = "glyph-terminal"
 version = "0.5.0"
 dependencies = [
  "alacritty_terminal",
+ "arboard",
+ "libc",
  "open",
  "portable-pty",
  "serde",

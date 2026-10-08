@@ -361,3 +361,201 @@
   grid-template-columns: 1fr 1.5fr;
   gap: 10px;
 }
+
+/* "Preserve Panes" card in the workspace dialogs (PreservePanesToggle).
+   The whole card is the switch. */
+.preserve-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--glyph-surface-raised);
+  border: 1px solid var(--glyph-line);
+  border-radius: var(--radius-md);
+  color: var(--glyph-fg);
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+
+.preserve-card:hover {
+  border-color: var(--glyph-line-strong);
+}
+
+.preserve-card:focus-visible {
+  outline: none;
+  border-color: var(--glyph-accent);
+  box-shadow: 0 0 8px var(--glyph-accent-dim);
+}
+
+.preserve-card.is-on {
+  background: var(--glyph-accent-dim);
+  border-color: var(--glyph-accent);
+}
+
+.preserve-card-icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--glyph-surface);
+  color: var(--glyph-fg-muted);
+  transition: all var(--motion-fast);
+}
+
+.preserve-card.is-on .preserve-card-icon {
+  color: var(--glyph-accent);
+}
+
+.preserve-card-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.preserve-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.preserve-card-desc {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--glyph-fg-muted);
+}
+
+.preserve-card-status {
+  margin-top: 3px;
+  font-family: var(--nothing-mono);
+  font-size: 10px;
+  color: var(--glyph-fg-muted);
+}
+
+.preserve-card.is-on .preserve-card-status {
+  color: var(--glyph-accent);
+}
+
+/* Pill switch, used by the Preserve Panes card. */
+.glyph-switch {
+  flex-shrink: 0;
+  position: relative;
+  width: 34px;
+  height: 20px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: var(--glyph-line-strong);
+  transition: background var(--motion-fast);
+}
+
+.glyph-switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--glyph-fg);
+  transition: transform var(--motion-fast);
+}
+
+.preserve-card.is-on .glyph-switch {
+  background: var(--glyph-accent);
+}
+
+.preserve-card.is-on .glyph-switch-thumb {
+  background: #ffffff;
+  transform: translateX(14px);
+}
+
+/* Small uppercase label above a pane's fields. */
+.pane-field-label {
+  font-size: 10px;
+  color: var(--nothing-gray-500);
+}
+
+/* Per-pane "If the Connection Drops" segmented control (ConnectionLossSelect). */
+.connection-loss-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.segmented {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  padding: 3px;
+  background: var(--glyph-surface);
+  border: 1px solid var(--glyph-line);
+  border-radius: var(--radius-md);
+}
+
+.segmented-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: calc(var(--radius-md) - 2px);
+  color: var(--glyph-fg-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all var(--motion-fast);
+}
+
+.segmented-option:hover {
+  color: var(--glyph-fg);
+  background: var(--glyph-surface-raised);
+}
+
+.segmented-option.is-selected {
+  color: var(--glyph-fg);
+  background: var(--glyph-surface-raised);
+  border-color: var(--glyph-line-strong);
+}
+
+.segmented-option.is-warn.is-selected {
+  border-color: var(--glyph-warning);
+}
+
+.segmented-option.is-warn.is-selected svg {
+  color: var(--glyph-warning);
+}
+
+.segmented-option.is-restart.is-selected {
+  border-color: var(--glyph-accent);
+}
+
+.segmented-option.is-restart.is-selected svg {
+  color: var(--glyph-accent);
+}
+
+.connection-loss-hint {
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--glyph-fg-muted);
+}
+
+/* No startup command: the choice is kept but has nothing to act on. */
+.connection-loss-field.is-inactive .segmented {
+  opacity: 0.5;
+}
+
+@media (max-width: 480px) {
+  .segmented-option svg {
+    display: none;
+  }
+}

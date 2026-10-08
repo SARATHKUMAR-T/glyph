@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { buildNPaneLayout } from "../../lib/workspace/treeConverter";
 import { createId } from "../../lib/terminal/splitTree";
-import type { Workspace, WorkspacePaneConfig } from "../../lib/workspace/types";
+import type { ConnectionLossAction, Workspace, WorkspacePaneConfig } from "../../lib/workspace/types";
+import { PreservePanesToggle, countStartupCommands } from "./PreservePanesToggle";
+import { ConnectionLossSelect } from "./ConnectionLossSelect";
 
 type WorkspaceManagerModalProps = {
   isOpen: boolean;
@@ -102,7 +104,7 @@ export function WorkspaceManagerModal({
 
   const handlePaneChange = (
     index: number,
-    field: "name" | "cwd" | "commandStr",
+    field: "name" | "cwd" | "commandStr" | "onConnectionLoss",
     value: string,
   ) => {
     if (!editingWs) return;
@@ -118,6 +120,8 @@ export function WorkspaceManagerModal({
         pane.cwd = value || undefined;
       } else if (field === "commandStr") {
         pane.command = value;
+      } else if (field === "onConnectionLoss") {
+        pane.onConnectionLoss = value as ConnectionLossAction;
       }
 
       copyPanes[index] = pane;
@@ -172,6 +176,12 @@ export function WorkspaceManagerModal({
                   onChange={(e) => setEditingWs({ ...editingWs, description: e.target.value })}
                 />
               </div>
+
+              <PreservePanesToggle
+                value={editingWs.preservePanes ?? false}
+                onChange={(preservePanes) => setEditingWs({ ...editingWs, preservePanes })}
+                commandCount={countStartupCommands(editingWs.panes)}
+              />
 
               <div className="form-group">
                 <label className="form-label">Layout Presets</label>
@@ -258,6 +268,11 @@ export function WorkspaceManagerModal({
                             placeholder="e.g. npm run dev or cargo run"
                           />
                         </div>
+                        <ConnectionLossSelect
+                          value={pane.onConnectionLoss}
+                          onChange={(value) => handlePaneChange(idx, "onConnectionLoss", value)}
+                          hasCommand={cmdStr.trim() !== ""}
+                        />
                       </div>
                     );
                   })}

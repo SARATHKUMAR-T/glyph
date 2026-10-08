@@ -8,6 +8,20 @@ pub enum CommandConfig {
     Structured { program: String, args: Vec<String> },
 }
 
+/// What a pane does when its startup command loses its network
+/// connection (an `ssh` dropping, a remote log stream dying, ...).
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ConnectionLossAction {
+    /// Don't watch the command at all.
+    #[default]
+    Off,
+    /// Show a warning on the pane with a Restart button.
+    Warn,
+    /// Re-run the command by itself once the network is back.
+    Restart,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct WorkspacePaneConfig {
@@ -15,6 +29,8 @@ pub struct WorkspacePaneConfig {
     pub name: String,
     pub cwd: Option<String>,
     pub command: Option<CommandConfig>,
+    #[serde(default)]
+    pub on_connection_loss: ConnectionLossAction,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -40,6 +56,12 @@ pub struct Workspace {
     pub description: Option<String>,
     pub layout: WorkspaceLayoutNode,
     pub panes: Vec<WorkspacePaneConfig>,
+    /// Bring this workspace's tab back on the next launch with each pane's
+    /// startup command re-run (an `ssh`, a `docker exec`, ...), so its
+    /// connections are restored. Defaults to off for workspaces saved
+    /// before the option existed.
+    #[serde(default)]
+    pub preserve_panes: bool,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -58,6 +80,14 @@ pub struct SessionTab {
     pub title: String,
     pub layout: WorkspaceLayoutNode,
     pub panes: Vec<WorkspacePaneConfig>,
+    /// Opened from a workspace with `preserve_panes` on: its pane commands
+    /// are kept (and re-run on restore) instead of being blanked.
+    #[serde(default)]
+    pub preserve_panes: bool,
+    /// The saved workspace the tab came from, so later edits to it reach
+    /// the restored tab too.
+    #[serde(default)]
+    pub workspace_id: Option<String>,
 }
 
 /// The whole window's open tabs, auto-saved on every structural change

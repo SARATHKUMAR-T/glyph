@@ -132,3 +132,15 @@ function ensureTauriRuntime() {
   }
 }
 
+
+/** Name of the program running in the session's foreground (e.g. `ssh`),
+ * or null while the shell sits at an idle prompt. */
+export async function getForegroundCommand(sessionId: string): Promise<string | null> {
+  return invoke<string | null>("terminal_foreground_command", { sessionId });
+}
+
+/** Sends SIGTERM (or SIGKILL with `force`) to the session's foreground job
+ * — never the shell itself. */
+export async function stopForegroundJob(sessionId: string, force: boolean): Promise<void> {
+  return invoke<void>("terminal_stop_foreground", { sessionId, force });
+}

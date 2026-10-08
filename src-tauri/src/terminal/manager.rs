@@ -171,6 +171,55 @@ impl TerminalManager {
             .count()
     }
 
+    /// The process group of the job running in this terminal's foreground,
+    /// or `None` while the shell sits at an idle prompt (the PTY's
+    /// foreground group is the shell's own). One `tcgetpgrp` call — cheap
+    /// enough to poll.
+    fn foreground_job(&self, session_id: &str) -> Result<Option<u32>, TerminalError> {
+        let sessions = self
+            .sessions
+            .lock()
+            .map_err(|_| TerminalError::StateUnavailable)?;
+        let session = sessions
+            .get(session_id)
+            .ok_or_else(|| TerminalError::SessionNotFound(session_id.to_string()))?;
+
+        #[cfg(unix)]
+        if let (Some(pid), Some(group)) = (session.pid, session.master.process_group_leader()) {
+            let group = group as u32;
+            return Ok((group != pid).then_some(group));
+        }
+        Ok(None)
+    }
+
+    /// Name of the program running in the foreground (e.g. `ssh`), or
+    /// `None` while the shell is idle. A running job whose name can't be
+    /// read comes back as an empty string.
+    pub fn foreground_command(&self, session_id: &str) -> Result<Option<String>, TerminalError> {
+        Ok(self.foreground_job(session_id)?.map(|group| {
+            std::fs::read_to_string(format!("/proc/{group}/comm"))
+                .map(|name| name.trim().to_string())
+                .unwrap_or_default()
+        }))
+    }
+
+    /// Signals the foreground job's whole process group — SIGTERM, or
+    /// SIGKILL with `force` — to stop a command that ignores Ctrl+C (a
+    /// frozen network connection). Never touches the shell itself: an idle
+    /// terminal has no foreground job, so this is then a no-op.
+    pub fn stop_foreground_job(&self, session_id: &str, force: bool) -> Result<(), TerminalError> {
+        #[cfg(unix)]
+        if let Some(group) = self.foreground_job(session_id)? {
+            let signal = if force { libc::SIGKILL } else { libc::SIGTERM };
+            // SAFETY: plain syscall; `group` is a process group id read
+            // from this PTY, and is never the shell's own (see above).
+            unsafe { libc::killpg(group as libc::pid_t, signal) };
+        }
+        #[cfg(not(unix))]
+        let _ = (session_id, force);
+        Ok(())
+    }
+
     /// Kills every shell (and thereby its foreground job) and drops the sessions.
     pub fn close_all(&self, app: &AppHandle) {
         let ids: Vec<String> = match self.sessions.lock() {

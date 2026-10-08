@@ -42,6 +42,9 @@ export function TerminalTab({
   tab,
 }: TerminalTabProps) {
   const displayTitle = paneCount > 1 ? `${tab.title} (${paneCount} Panes)` : tab.title;
+  // A saved workspace's tab takes its name from the workspace (renamed in
+  // Manage Workspaces), so it has no inline rename of its own.
+  const canRename = !tab.workspaceId;
 
   const [editing, setEditing] = useState(false);
   const startPos = useRef<{ x: number; y: number } | null>(null);
@@ -114,7 +117,7 @@ export function TerminalTab({
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
     >
-      {editing ? (
+      {editing && canRename ? (
         <div className="terminal-tab-rename">
           <RenameInput
             value={tab.title}
@@ -131,15 +134,15 @@ export function TerminalTab({
             aria-selected={active}
             className="terminal-tab-main"
             role="tab"
-            title={`${displayTitle} — double-click to rename`}
+            title={canRename ? `${displayTitle} — double-click to rename` : `${displayTitle} — saved workspace`}
             type="button"
             onClick={() => onActivate(tab.clientId)}
-            onDoubleClick={() => setEditing(true)}
+            onDoubleClick={canRename ? () => setEditing(true) : undefined}
           >
             <span className={`tab-status tab-status-${status}`} aria-hidden="true" />
             <span className="tab-title">{displayTitle}</span>
           </button>
-          <RenamePencil label={`Rename ${tab.title}`} onClick={() => setEditing(true)} />
+          {canRename && <RenamePencil label={`Rename ${tab.title}`} onClick={() => setEditing(true)} />}
         </>
       )}
       <button
