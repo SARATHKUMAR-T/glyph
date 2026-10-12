@@ -626,7 +626,7 @@ export function App({ initialSession }: AppProps) {
       : null;
 
   return (
-    <div className="app-shell">
+    <div className={settings.matrixEnabled ? "app-shell" : "app-shell matrix-off"}>
       <WindowResizeHandles />
       <ConfirmCloseModal />
       <MatrixDotBackground
