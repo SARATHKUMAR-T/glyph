@@ -97,6 +97,12 @@ body,
   background-image: none !important;
 }
 
+/* Matrix background turned off in settings: no dots at all, not even the
+ * static CSS grid underneath the canvas layer. */
+.app-shell.matrix-off {
+  background-image: none;
+}
+
 [data-glyph-theme-category="light"] .split-pane-wrapper {
   background-color: var(--glyph-bg);
 }

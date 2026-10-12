@@ -707,6 +707,10 @@ export function GlyphEngineTerminalView({
   const pasteText = (text: string) => {
     const sessionId = sessionIdRef.current;
     if (!sessionId || !text) return;
+    // A paste is new input — drop the highlight (it would otherwise sit
+    // on stale viewport rows as the output scrolls). The PRIMARY selection
+    // itself is kept, so middle-click can paste the same text again.
+    clearSelection();
     snapToBottom(sessionId);
     void pasteTerminalData(sessionId, text).catch((error: unknown) =>
       onSessionStatus(pane.paneId, "error", formatError(error)),

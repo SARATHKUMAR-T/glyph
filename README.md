@@ -17,7 +17,15 @@ cursors to remappable shortcuts and split panes.
 
 ------------------------------------------------------------------------
 
-## 🆕 What's New in v0.6.0
+## 🆕 What's New in v0.6.1
+
+-   Selected text is now clearly visible in the light themes (Solarized Light, GitHub Light, Paper)
+-   Turning the matrix dot background off now removes every dot, including the static grid
+-   Pasting clears the current selection highlight
+
+------------------------------------------------------------------------
+
+## What's New in v0.6.0
 
 **Workspaces**
 
