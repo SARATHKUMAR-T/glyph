@@ -168,6 +168,11 @@ body,
   flex: 1 1 auto;
 }
 
+/* Leave room for the native macOS traffic lights drawn over the left edge. */
+.title-bar-macos .title-bar-left {
+  padding-left: 64px;
+}
+
 .perf-bar-desktop {
   display: flex;
   align-items: center;

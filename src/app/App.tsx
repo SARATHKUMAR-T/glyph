@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { LogicalPosition } from "@tauri-apps/api/dpi";
 import { isPermissionGranted, requestPermission } from "@tauri-apps/plugin-notification";
 
 import "../styles/workspace.css";
@@ -27,6 +28,7 @@ import { getTheme } from "../lib/terminal/themes";
 import { formatKeyCombo, useKeybindings } from "../hooks/useKeybindings";
 import { useWorkspaces } from "../hooks/useWorkspaces";
 import { isTauriRuntime } from "../lib/terminal/events";
+import { isMac } from "../lib/platform";
 import {
   closeTerminalSession,
   getForegroundCommand,
@@ -345,9 +347,16 @@ export function App({ initialSession }: AppProps) {
         height: 760,
         minWidth: 860,
         minHeight: 520,
-        decorations: false,
         resizable: true,
         center: true,
+        ...(isMac
+          ? {
+              decorations: true,
+              titleBarStyle: "overlay" as const,
+              hiddenTitle: true,
+              trafficLightPosition: new LogicalPosition(16, 16),
+            }
+          : { decorations: false }),
       });
       webview.once("tauri://error", (err) => {
         console.error("Failed to create new Glyph window:", err);
@@ -682,7 +691,7 @@ export function App({ initialSession }: AppProps) {
 
   return (
     <div className={settings.matrixEnabled ? "app-shell" : "app-shell matrix-off"}>
-      <WindowResizeHandles />
+      {!isMac && <WindowResizeHandles />}
       <ConfirmCloseModal />
       <ConfirmKillModal pending={pendingKill} onCancel={cancelPendingKill} onConfirm={confirmPendingKill} />
       <MatrixDotBackground
