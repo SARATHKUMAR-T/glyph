@@ -196,11 +196,7 @@ impl TerminalManager {
     /// `None` while the shell is idle. A running job whose name can't be
     /// read comes back as an empty string.
     pub fn foreground_command(&self, session_id: &str) -> Result<Option<String>, TerminalError> {
-        Ok(self.foreground_job(session_id)?.map(|group| {
-            std::fs::read_to_string(format!("/proc/{group}/comm"))
-                .map(|name| name.trim().to_string())
-                .unwrap_or_default()
-        }))
+        Ok(self.foreground_job(session_id)?.map(process_name))
     }
 
     /// Signals the foreground job's whole process group — SIGTERM, or
@@ -258,6 +254,12 @@ impl TerminalManager {
             }
         }
 
+        // macOS has no /proc; ask the kernel for the shell's current directory.
+        #[cfg(target_os = "macos")]
+        if let Some(cwd) = session.pid.and_then(macos_process_cwd) {
+            return Ok(Some(cwd));
+        }
+
         // Fallback: spawn-time cwd
         Ok(session.cwd.clone())
     }
@@ -307,4 +309,70 @@ impl TerminalManager {
             }
         });
     }
+}
+
+/// Short name of a running process (e.g. `ssh`), or an empty string when
+/// it can't be read.
+#[cfg(target_os = "linux")]
+fn process_name(pid: u32) -> String {
+    std::fs::read_to_string(format!("/proc/{pid}/comm"))
+        .map(|name| name.trim().to_string())
+        .unwrap_or_default()
+}
+
+#[cfg(target_os = "macos")]
+fn process_name(pid: u32) -> String {
+    let mut buf = [0u8; 256];
+    // SAFETY: `buf` is a valid, writable buffer of the length passed in.
+    let len = unsafe {
+        libc::proc_name(
+            pid as libc::c_int,
+            buf.as_mut_ptr().cast(),
+            buf.len() as u32,
+        )
+    };
+    if len <= 0 {
+        return String::new();
+    }
+    String::from_utf8_lossy(&buf[..len as usize]).into_owned()
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn process_name(_pid: u32) -> String {
+    String::new()
+}
+
+#[cfg(target_os = "macos")]
+fn macos_process_cwd(pid: u32) -> Option<String> {
+    use std::ffi::CStr;
+    use std::mem::{size_of, size_of_val, MaybeUninit};
+
+    let mut info = MaybeUninit::<libc::proc_vnodepathinfo>::zeroed();
+    let size = size_of::<libc::proc_vnodepathinfo>() as libc::c_int;
+    // SAFETY: `info` is a zeroed buffer of exactly `size` bytes, which is
+    // what PROC_PIDVNODEPATHINFO fills in.
+    let written = unsafe {
+        libc::proc_pidinfo(
+            pid as libc::c_int,
+            libc::PROC_PIDVNODEPATHINFO,
+            0,
+            info.as_mut_ptr().cast(),
+            size,
+        )
+    };
+    if written != size {
+        return None;
+    }
+    // SAFETY: the kernel filled the whole struct (checked above).
+    let info = unsafe { info.assume_init() };
+    // `vip_path` is a NUL-terminated MAXPATHLEN buffer, split into rows by libc.
+    let path = &info.pvi_cdir.vip_path;
+    // SAFETY: the rows are contiguous `c_char`s, MAXPATHLEN in total.
+    let bytes =
+        unsafe { std::slice::from_raw_parts(path.as_ptr().cast::<u8>(), size_of_val(path)) };
+    CStr::from_bytes_until_nul(bytes)
+        .ok()
+        .and_then(|path| path.to_str().ok())
+        .filter(|path| !path.is_empty())
+        .map(str::to_string)
 }

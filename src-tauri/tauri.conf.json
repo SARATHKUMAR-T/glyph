@@ -41,6 +41,10 @@
       "icons/icon.png"
     ],
     "category": "DeveloperTool",
+    "macOS": {
+      "minimumSystemVersion": "11.0",
+      "signingIdentity": "-"
+    },
     "linux": {
       "deb": {
         "desktopTemplate": "templates/glyph.desktop"

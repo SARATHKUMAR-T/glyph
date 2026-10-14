@@ -1,7 +1,7 @@
 [package]
 name = "glyph-terminal"
 version = "0.6.2"
-description = "A Nothing-inspired Linux terminal emulator."
+description = "A Nothing-inspired terminal emulator for Linux and macOS."
 authors = ["Sarath"]
 edition = "2021"
 rust-version = "1.77"

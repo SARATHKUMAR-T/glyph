@@ -93,9 +93,79 @@ jobs:
           name: bundles-${{ matrix.arch }}
           path: dist-release/*
 
+  build-macos:
+    name: Build (macOS universal)
+    needs: verify-version
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: macos-universal
+
+      - run: npm ci
+
+      # Developer ID signing + notarization kicks in only when the Apple
+      # secrets exist. Without them the bundle is ad-hoc signed (the
+      # `signingIdentity: "-"` in tauri.conf.json): it runs, but Gatekeeper
+      # asks users to approve it once under Privacy & Security.
+      - name: Configure Apple signing
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ]; then
+            echo "::notice::No Apple signing secrets set; building an ad-hoc signed app."
+            exit 0
+          fi
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            {
+              echo "$name<<__EOF__"
+              printenv "$name"
+              echo "__EOF__"
+            } >> "$GITHUB_ENV"
+          done
+
+      - name: Build app bundles
+        run: npm run tauri build -- --target universal-apple-darwin
+
+      - name: Collect and rename bundle artifacts
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.verify-version.outputs.version }}"
+          BUNDLE="src-tauri/target/universal-apple-darwin/release/bundle"
+          OUT="dist-release"
+          mkdir -p "$OUT"
+
+          DMG_SRC="$(find "$BUNDLE/dmg" -name '*.dmg' | head -n1)"
+          cp "$DMG_SRC" "$OUT/Glyph_${VERSION}_universal.dmg"
+
+          # The in-app updater (scripts/self-update.sh) swaps this in place.
+          COPYFILE_DISABLE=1 tar -czf "$OUT/Glyph_${VERSION}_universal.app.tar.gz" -C "$BUNDLE/macos" Glyph.app
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-macos
+          path: dist-release/*
+
   publish:
     name: Publish GitHub Release
-    needs: [verify-version, build]
+    needs: [verify-version, build, build-macos]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4

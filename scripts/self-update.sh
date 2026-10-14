@@ -31,9 +31,10 @@ VERSION="${TAG#v}"
 log() { printf '\033[1;36m[glyph-update]\033[0m %s\n' "$1" >&2; }
 fail() { printf '\033[1;31m[glyph-update]\033[0m %s\n' "$1" >&2; exit 1; }
 
-case "$(uname -s)" in
-  Linux) ;;
-  *) fail "Automatic updates currently support Linux only. Grab v${VERSION} manually: https://github.com/${REPO}/releases/tag/${TAG}" ;;
+OS="$(uname -s)"
+case "$OS" in
+  Linux|Darwin) ;;
+  *) fail "Automatic updates support Linux and macOS only. Grab v${VERSION} manually: https://github.com/${REPO}/releases/tag/${TAG}" ;;
 esac
 
 case "$(uname -m)" in
@@ -70,12 +71,46 @@ download_and_verify() {
   expected="$(grep " ${asset}\$" "$WORKDIR/checksums.txt" | awk '{print $1}')"
   [ -n "$expected" ] || fail "No checksum entry for ${asset} — refusing to install an unverified binary."
 
+  # macOS ships `shasum` rather than coreutils' `sha256sum`.
   local actual
-  actual="$(sha256sum "$dest" | awk '{print $1}')"
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(sha256sum "$dest" | awk '{print $1}')"
+  else
+    actual="$(shasum -a 256 "$dest" | awk '{print $1}')"
+  fi
   [ "$expected" = "$actual" ] || fail "Checksum mismatch for ${asset} (expected ${expected}, got ${actual}). Aborting."
 
   echo "$dest"
 }
+
+# macOS: one universal (Intel + Apple Silicon) bundle, swapped in place.
+# curl doesn't set the quarantine attribute, so Gatekeeper won't re-prompt
+# for the new copy the way it does for a browser download.
+if [ "$OS" = "Darwin" ]; then
+  APP=""
+  for candidate in "/Applications/Glyph.app" "$HOME/Applications/Glyph.app"; do
+    if [ -d "$candidate" ]; then APP="$candidate"; break; fi
+  done
+  [ -n "$APP" ] || fail "Couldn't find Glyph.app in /Applications. Download v${VERSION} manually: https://github.com/${REPO}/releases/tag/${TAG}"
+
+  ASSET="Glyph_${VERSION}_universal.app.tar.gz"
+  NEW_FILE="$(download_and_verify "$ASSET")"
+  tar -xzf "$NEW_FILE" -C "$WORKDIR"
+  [ -d "$WORKDIR/Glyph.app" ] || fail "${ASSET} didn't contain Glyph.app. Aborting."
+
+  if [ -w "$(dirname "$APP")" ] && [ -w "$APP" ]; then
+    rm -rf "$APP" && mv "$WORKDIR/Glyph.app" "$APP"
+  else
+    log "Replacing ${APP} (you may be prompted for your password)…"
+    if [ -r /dev/tty ] && : 2>/dev/null < /dev/tty; then
+      sudo rm -rf "$APP" < /dev/tty && sudo mv "$WORKDIR/Glyph.app" "$APP" < /dev/tty
+    else
+      sudo rm -rf "$APP" && sudo mv "$WORKDIR/Glyph.app" "$APP"
+    fi
+  fi
+  log "Updated ${APP} to v${VERSION}. Open Settings → Updates → Restart Now to pick it up."
+  exit 0
+fi
 
 # Prefer replacing the running AppImage in place when launched from one —
 # it's the frictionless, no-root path. $APPIMAGE is set by the AppImage
