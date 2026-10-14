@@ -27,6 +27,12 @@ pub fn spawn_shell(session_id: &str, request: CreateTerminalRequest) -> Result<S
         .map_err(|error| TerminalError::PtyCreation(error.to_string()))?;
 
     let mut command = CommandBuilder::new(&shell);
+    // Apps opened from Finder or the Dock start with a bare PATH, and only
+    // a login shell reads /etc/zprofile and ~/.zprofile, where path_helper
+    // and Homebrew add their directories. Terminal.app and iTerm2 start
+    // login shells for the same reason.
+    #[cfg(target_os = "macos")]
+    command.arg("-l");
     command.env("TERM", "xterm-256color");
     command.env("COLORTERM", "truecolor");
     command.env("LANG", "en_US.UTF-8");
@@ -39,6 +45,13 @@ pub fn spawn_shell(session_id: &str, request: CreateTerminalRequest) -> Result<S
 
     if let Some(cwd) = cwd.as_ref() {
         command.cwd(cwd);
+    } else {
+        // A macOS app launched from Finder runs in `/`, which a new shell
+        // would otherwise inherit; start in the home folder instead.
+        #[cfg(target_os = "macos")]
+        if let Ok(home) = env::var("HOME") {
+            command.cwd(home);
+        }
     }
 
     let child = pair
