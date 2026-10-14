@@ -17,7 +17,14 @@ cursors to remappable shortcuts and split panes.
 
 ------------------------------------------------------------------------
 
-## 🆕 What's New in v0.7.0
+## 🆕 What's New in v0.7.1
+
+-   macOS: the shell starts as a login shell, so Homebrew and other tools set up in `~/.zprofile` are found
+-   macOS: new terminals open in your home folder instead of `/`
+
+------------------------------------------------------------------------
+
+## What's New in v0.7.0
 
 -   Glyph now runs on macOS: one universal download for Apple Silicon and Intel Macs (macOS 11 or later)
 -   The in-app updater works on macOS too, replacing Glyph.app in place
