@@ -17,7 +17,15 @@ cursors to remappable shortcuts and split panes.
 
 ------------------------------------------------------------------------
 
-## 🆕 What's New in v0.6.1
+## 🆕 What's New in v0.6.2
+
+-   Closing a pane or tab with a program still running asks first, naming the program, and closing it kills it
+-   Closing a pane or tab now stops its shell instead of leaving it running in the background
+-   The tab close button stays on the right edge for saved-workspace tabs
+
+------------------------------------------------------------------------
+
+## What's New in v0.6.1
 
 -   Selected text is now clearly visible in the light themes (Solarized Light, GitHub Light, Paper)
 -   Turning the matrix dot background off now removes every dot, including the static grid

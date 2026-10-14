@@ -565,6 +565,7 @@ body,
 }
 
 .terminal-tab-main {
+  grid-column: 1;
   min-width: 0;
   height: 100%;
   display: flex;
@@ -576,7 +577,10 @@ body,
   padding: 0 0 0 10px;
 }
 
+/* Pinned to the last column: a tab without the rename pencil (a saved
+ * workspace) would otherwise auto-place it one column too far left. */
 .terminal-tab-close {
+  grid-column: 3;
   justify-self: center;
   align-self: center;
   width: 22px;

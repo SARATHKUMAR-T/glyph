@@ -8,6 +8,7 @@ import { TerminalPanePortals } from "../components/terminal/TerminalPanePortals"
 import { TerminalSplitView } from "../components/terminal/TerminalSplitView";
 import { TerminalTabs } from "../components/tabs/TerminalTabs";
 import { ConfirmCloseModal } from "../components/window/ConfirmCloseModal";
+import { ConfirmKillModal, type PendingKill } from "../components/window/ConfirmKillModal";
 import { TitleBar } from "../components/window/TitleBar";
 import { WindowResizeHandles } from "../components/window/WindowResizeHandles";
 import { MatrixDotBackground } from "../components/terminal/MatrixDotBackground";
@@ -26,7 +27,12 @@ import { getTheme } from "../lib/terminal/themes";
 import { formatKeyCombo, useKeybindings } from "../hooks/useKeybindings";
 import { useWorkspaces } from "../hooks/useWorkspaces";
 import { isTauriRuntime } from "../lib/terminal/events";
-import { getTerminalCwd, writeTerminalData } from "../hooks/useTerminalSession";
+import {
+  closeTerminalSession,
+  getForegroundCommand,
+  getTerminalCwd,
+  writeTerminalData,
+} from "../hooks/useTerminalSession";
 import { useUpdateChecker } from "../hooks/useUpdateChecker";
 import { buildUpdateCommand } from "../lib/update/updateCommand";
 import { encodeKeyEvent, isTabKey } from "../lib/terminal/keyEncoding";
@@ -445,6 +451,55 @@ export function App({ initialSession }: AppProps) {
     [activeTabId, clearBlocks, renumberAndReindex],
   );
 
+  const [pendingKill, setPendingKill] = useState<(PendingKill & { close: () => void }) | null>(null);
+
+  /** Runs `close` straight away when none of `panes` has a program running,
+   * otherwise asks first. Either way their shells are killed afterwards —
+   * a shell outlives its view (so splits can remount it), so nothing else
+   * would stop it or the program in it. */
+  const closeWithConfirm = useCallback(
+    async (kind: PendingKill["kind"], panes: TerminalPaneModel[], close: () => void) => {
+      const sessionIds = panes.flatMap((pane) => (pane.sessionId ? [pane.sessionId] : []));
+      const finish = () => {
+        close();
+        if (isTauriRuntime()) sessionIds.forEach((id) => void closeTerminalSession(id).catch(() => {}));
+      };
+      if (!isTauriRuntime()) return finish();
+      const jobs = await Promise.all(sessionIds.map((id) => getForegroundCommand(id).catch(() => null)));
+      const processes = jobs.filter((name): name is string => name !== null);
+      if (processes.length === 0) return finish();
+      setPendingKill({ kind, processes, close: finish });
+    },
+    [],
+  );
+
+  const requestClosePane = useCallback(
+    (clientId: string, paneId: string) => {
+      const tab = tabsRef.current.find((t) => t.clientId === clientId);
+      const pane = tab && findPaneNode(tab.rootNode, paneId);
+      if (!tab || !pane) return;
+      // The window's last pane stays open (see `closePane`).
+      if (tabsRef.current.length <= 1 && getAllPanesInTree(tab.rootNode).length <= 1) return;
+      void closeWithConfirm("pane", [pane], () => closePane(clientId, paneId));
+    },
+    [closePane, closeWithConfirm],
+  );
+
+  const requestCloseTab = useCallback(
+    (clientId: string) => {
+      const tab = tabsRef.current.find((t) => t.clientId === clientId);
+      if (!tab || tabsRef.current.length <= 1) return;
+      void closeWithConfirm("tab", getAllPanesInTree(tab.rootNode), () => closeTab(clientId));
+    },
+    [closeTab, closeWithConfirm],
+  );
+
+  const cancelPendingKill = useCallback(() => setPendingKill(null), []);
+  const confirmPendingKill = useCallback(() => {
+    pendingKill?.close();
+    setPendingKill(null);
+  }, [pendingKill]);
+
   const handleActivatePane = useCallback((clientId: string, paneId: string) => {
     setTabs((current) =>
       current.map((t) =>
@@ -588,7 +643,7 @@ export function App({ initialSession }: AppProps) {
     onCloseTerminal: () => {
       const activeTab = tabsRef.current.find((t) => t.clientId === activeTabId);
       if (activeTab) {
-        closePane(activeTab.clientId, activeTab.activePaneId);
+        requestClosePane(activeTab.clientId, activeTab.activePaneId);
       }
     },
     onSplitVertical: () => void splitActiveTerminal("vertical"),
@@ -629,6 +684,7 @@ export function App({ initialSession }: AppProps) {
     <div className={settings.matrixEnabled ? "app-shell" : "app-shell matrix-off"}>
       <WindowResizeHandles />
       <ConfirmCloseModal />
+      <ConfirmKillModal pending={pendingKill} onCancel={cancelPendingKill} onConfirm={confirmPendingKill} />
       <MatrixDotBackground
         enabled={settings.matrixEnabled && getTheme(settings.themeId).category !== "light"}
         style={settings.matrixStyle}
@@ -680,7 +736,7 @@ export function App({ initialSession }: AppProps) {
             setSettingsOpen(false);
             setExpandedPane(null);
           }}
-          onClose={closeTab}
+          onClose={requestCloseTab}
           onRename={handleRenameTab}
           onNewTerminal={() => {
             addTerminal();
@@ -728,9 +784,9 @@ export function App({ initialSession }: AppProps) {
                   settings={settings}
                   tabId={tab.clientId}
                   onActivatePane={(paneId) => handleActivatePane(tab.clientId, paneId)}
-                  onClosePane={(paneId) => closePane(tab.clientId, paneId)}
+                  onClosePane={(paneId) => requestClosePane(tab.clientId, paneId)}
                   onCloseSearch={() => setSearchOpen(false)}
-                  onCloseTerminal={() => closePane(tab.clientId, tab.activePaneId)}
+                  onCloseTerminal={() => requestClosePane(tab.clientId, tab.activePaneId)}
                   onExpandPane={(paneId) => toggleExpandPane(tab.clientId, paneId)}
                   onNewTerminal={addTerminal}
                   onNewWindow={openNewWindow}
