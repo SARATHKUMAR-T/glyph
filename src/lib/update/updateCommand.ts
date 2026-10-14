@@ -1,3 +1,4 @@
+import { isMac } from "../platform";
 import type { UpdateInfo } from "./types";
 
 /**
@@ -27,7 +28,7 @@ import type { UpdateInfo } from "./types";
  */
 export function buildUpdateCommand(update: UpdateInfo): string {
   const scriptUrl = `https://raw.githubusercontent.com/SARATHKUMAR-T/glyph/${update.tag}/scripts/self-update.sh`;
-  const sudo = navigator.userAgent.includes("Mac") ? "" : "sudo -v && ";
+  const sudo = isMac ? "" : "sudo -v && ";
   return (
     `${sudo}echo "[glyph-update] Fetching the ${update.tag} installer..." && ` +
     `curl -fsSL --connect-timeout 20 --max-time 120 ${scriptUrl} | bash -s -- ${update.tag}`

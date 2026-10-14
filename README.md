@@ -17,7 +17,14 @@ cursors to remappable shortcuts and split panes.
 
 ------------------------------------------------------------------------
 
-## 🆕 What's New in v0.7.1
+## 🆕 What's New in v0.7.2
+
+-   macOS: native red, yellow and green window buttons at the top left, in place of Glyph's own buttons at the top right
+-   macOS: windows resize from their edges natively
+
+------------------------------------------------------------------------
+
+## What's New in v0.7.1
 
 -   macOS: the shell starts as a login shell, so Homebrew and other tools set up in `~/.zprofile` are found
 -   macOS: new terminals open in your home folder instead of `/`
