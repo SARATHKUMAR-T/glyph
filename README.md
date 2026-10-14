@@ -1,6 +1,6 @@
 # Glyph
 
-### A modern, customizable terminal for Linux.
+### A modern, customizable terminal for Linux and macOS.
 
 > **Your terminal. Your workflow.**
 
@@ -17,7 +17,15 @@ cursors to remappable shortcuts and split panes.
 
 ------------------------------------------------------------------------
 
-## 🆕 What's New in v0.6.2
+## 🆕 What's New in v0.7.0
+
+-   Glyph now runs on macOS: one universal download for Apple Silicon and Intel Macs (macOS 11 or later)
+-   The in-app updater works on macOS too, replacing Glyph.app in place
+-   On macOS, new panes and tabs open in the current shell's directory, and close prompts name the running program
+
+------------------------------------------------------------------------
+
+## What's New in v0.6.2
 
 -   Closing a pane or tab with a program still running asks first, naming the program, and closing it kills it
 -   Closing a pane or tab now stops its shell instead of leaving it running in the background
@@ -186,6 +194,16 @@ Run it:
 ./Glyph_0.2.0_amd64.AppImage
 ```
 
+### macOS
+
+Download `Glyph_<version>_universal.dmg` (one build for both Apple Silicon and Intel Macs, macOS 11 or later), open it, and drag **Glyph** into **Applications**.
+
+The first time you open it, macOS may say it can't verify the developer. Open **System Settings → Privacy & Security** and click **Open Anyway**, or clear the download flag from a terminal:
+
+``` bash
+xattr -dr com.apple.quarantine /Applications/Glyph.app
+```
+
 ### RPM
 
 For RPM-based distributions, download the `.rpm` package from the
@@ -203,11 +221,10 @@ sudo dnf install ./Glyph-0.2.0-1.x86_64.rpm
 
 ### Current Platform
 
--   Linux
--   Ubuntu tested
--   x86_64
+-   Linux (x86_64, arm64), Ubuntu tested
+-   macOS 11+ (Apple Silicon and Intel)
 
-Windows and macOS support are planned for future releases.
+Windows support is planned for a future release.
 
 ------------------------------------------------------------------------
 
@@ -384,11 +401,11 @@ npm run tauri build
 -   [x] Native clipboard support
 -   [x] OSC 133 shell integration
 -   [x] Production Linux packages
+-   [x] macOS support
 
 ### Planned
 
 -   [ ] Windows support
--   [ ] macOS support
 -   [ ] Persistent settings
 -   [ ] Persistent command history
 -   [ ] Improved shell integration

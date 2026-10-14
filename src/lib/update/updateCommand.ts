@@ -21,11 +21,15 @@ import type { UpdateInfo } from "./types";
  * happening, and the timeouts turn a stalled fetch into curl's own visible
  * error instead of an indefinite hang. No `--retry`: a retry after a
  * partial transfer would pipe a duplicated script body into bash.
+ *
+ * macOS skips `sudo -v`: the app bundle normally sits in an admin-writable
+ * /Applications, and the script asks for a password itself only when not.
  */
 export function buildUpdateCommand(update: UpdateInfo): string {
   const scriptUrl = `https://raw.githubusercontent.com/SARATHKUMAR-T/glyph/${update.tag}/scripts/self-update.sh`;
+  const sudo = navigator.userAgent.includes("Mac") ? "" : "sudo -v && ";
   return (
-    `sudo -v && echo "[glyph-update] Fetching the ${update.tag} installer..." && ` +
+    `${sudo}echo "[glyph-update] Fetching the ${update.tag} installer..." && ` +
     `curl -fsSL --connect-timeout 20 --max-time 120 ${scriptUrl} | bash -s -- ${update.tag}`
   );
 }
