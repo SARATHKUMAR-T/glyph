@@ -17,6 +17,7 @@ const OLD_IDENTIFIER: &str = "com.aximsoft.glyph";
 const NEW_IDENTIFIER: &str = "com.sarath.glyph";
 
 /// Same base directory Tauri's `app_data_dir()` resolves against on Linux.
+#[cfg(not(windows))]
 fn data_home() -> Option<PathBuf> {
     std::env::var_os("XDG_DATA_HOME")
         .map(PathBuf::from)
@@ -29,11 +30,15 @@ fn data_home() -> Option<PathBuf> {
 /// atomic, so a crash can't leave half-moved data. Failures are logged and
 /// never block startup: the worst case is the app starting with defaults.
 pub fn migrate_legacy_data_dir() {
+    // The first Windows build shipped after the rename, so there's nothing
+    // to move there.
+    #[cfg(not(windows))]
     if let Some(base) = data_home() {
         migrate_in(&base);
     }
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 fn migrate_in(base: &std::path::Path) {
     let old_dir = base.join(OLD_IDENTIFIER);
     let new_dir = base.join(NEW_IDENTIFIER);

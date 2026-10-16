@@ -46,10 +46,11 @@ pub fn spawn_shell(session_id: &str, request: CreateTerminalRequest) -> Result<S
     if let Some(cwd) = cwd.as_ref() {
         command.cwd(cwd);
     } else {
-        // A macOS app launched from Finder runs in `/`, which a new shell
-        // would otherwise inherit; start in the home folder instead.
-        #[cfg(target_os = "macos")]
-        if let Ok(home) = env::var("HOME") {
+        // A macOS app launched from Finder runs in `/`, and a Windows app
+        // launched from the Start menu runs in its install folder, which a
+        // new shell would otherwise inherit; start in the home folder instead.
+        #[cfg(any(target_os = "macos", windows))]
+        if let Some(home) = home_dir() {
             command.cwd(home);
         }
     }
@@ -87,6 +88,7 @@ pub fn spawn_shell(session_id: &str, request: CreateTerminalRequest) -> Result<S
     })
 }
 
+#[cfg(not(windows))]
 pub fn detect_shell() -> String {
     env::var("SHELL")
         .ok()
@@ -94,9 +96,38 @@ pub fn detect_shell() -> String {
         .unwrap_or_else(|| "/bin/bash".to_string())
 }
 
+/// Windows has no `$SHELL`. Prefer PowerShell 7 when installed, then the
+/// Windows PowerShell that ships with every Windows 10/11, then `cmd.exe`.
+#[cfg(windows)]
+pub fn detect_shell() -> String {
+    ["pwsh.exe", "powershell.exe"]
+        .into_iter()
+        .find_map(find_in_path)
+        .or_else(|| env::var("COMSPEC").ok())
+        .unwrap_or_else(|| "cmd.exe".to_string())
+}
+
+#[cfg(windows)]
+fn find_in_path(program: &str) -> Option<String> {
+    let path = env::var_os("PATH")?;
+    env::split_paths(&path)
+        .map(|dir| dir.join(program))
+        .find(|candidate| candidate.is_file())
+        .and_then(|candidate| candidate.to_str().map(str::to_string))
+}
+
+/// `HOME` on Unix; Windows keeps the home folder in `USERPROFILE`.
+fn home_dir() -> Option<String> {
+    #[cfg(windows)]
+    let var = "USERPROFILE";
+    #[cfg(not(windows))]
+    let var = "HOME";
+    env::var(var).ok()
+}
+
 fn expand_tilde(path_str: &str) -> String {
-    if path_str == "~" || path_str.starts_with("~/") {
-        if let Ok(home) = env::var("HOME") {
+    if path_str == "~" || path_str.starts_with("~/") || (cfg!(windows) && path_str.starts_with("~\\")) {
+        if let Some(home) = home_dir() {
             if path_str == "~" {
                 return home;
             } else {
@@ -123,7 +154,7 @@ fn validate_cwd(cwd: Option<String>) -> Result<Option<String>, TerminalError> {
     if path.is_dir() {
         Ok(Some(expanded))
     } else {
-        if let Ok(home) = env::var("HOME") {
+        if let Some(home) = home_dir() {
             let home_path = Path::new(&home);
             if home_path.is_dir() {
                 return Ok(Some(home));
@@ -139,7 +170,7 @@ mod tests {
 
     #[test]
     fn test_expand_tilde() {
-        if let Ok(home) = env::var("HOME") {
+        if let Some(home) = home_dir() {
             assert_eq!(expand_tilde("~"), home);
             assert_eq!(expand_tilde("~/Desktop"), format!("{home}/Desktop"));
         }
