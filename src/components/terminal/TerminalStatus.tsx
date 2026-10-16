@@ -9,7 +9,7 @@ function basename(path?: string | null) {
     return "shell";
   }
 
-  return path.split("/").filter(Boolean).pop() ?? path;
+  return path.split(/[\\/]/).filter(Boolean).pop() ?? path;
 }
 
 function formatCwd(path?: string | null) {
