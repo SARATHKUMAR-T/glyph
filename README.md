@@ -1,6 +1,6 @@
 # Glyph
 
-### A modern, customizable terminal for Linux and macOS.
+### A modern, customizable terminal for Linux, macOS, and Windows.
 
 > **Your terminal. Your workflow.**
 
@@ -17,7 +17,14 @@ cursors to remappable shortcuts and split panes.
 
 ------------------------------------------------------------------------
 
-## 🆕 What's New in v0.7.2
+## 🆕 What's New in v0.8.0
+
+-   Glyph now runs on Windows 10 and 11 (x64): a per-user installer (`.exe`) and an `.msi`
+-   On Windows, Glyph starts PowerShell 7 when it's installed, otherwise Windows PowerShell, and opens new terminals in your home folder
+
+------------------------------------------------------------------------
+
+## What's New in v0.7.2
 
 -   macOS: native red, yellow and green window buttons at the top left, in place of Glyph's own buttons at the top right
 -   macOS: windows resize from their edges natively
@@ -218,6 +225,14 @@ The first time you open it, macOS may say it can't verify the developer. Open **
 xattr -dr com.apple.quarantine /Applications/Glyph.app
 ```
 
+### Windows
+
+Download `Glyph_<version>_x64-setup.exe` and run it. It installs for your user account only, so no admin rights are needed, and fetches Microsoft's WebView2 runtime first if your PC doesn't have it. An `.msi` is also available for managed installs.
+
+The installer isn't code-signed yet, so Windows SmartScreen may show **Windows protected your PC**. Click **More info → Run anyway**.
+
+Glyph starts PowerShell 7 (`pwsh`) when it's installed, otherwise Windows PowerShell.
+
 ### RPM
 
 For RPM-based distributions, download the `.rpm` package from the
@@ -237,8 +252,7 @@ sudo dnf install ./Glyph-0.2.0-1.x86_64.rpm
 
 -   Linux (x86_64, arm64), Ubuntu tested
 -   macOS 11+ (Apple Silicon and Intel)
-
-Windows support is planned for a future release.
+-   Windows 10 and 11 (x64), preview
 
 ------------------------------------------------------------------------
 

@@ -163,9 +163,55 @@ jobs:
           name: bundles-macos
           path: dist-release/*
 
+  build-windows:
+    name: Build (Windows x64)
+    needs: verify-version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: windows-x64
+
+      - run: npm ci
+
+      # Unsigned for now: SmartScreen asks users to confirm the first run
+      # ("More info" -> "Run anyway").
+      - name: Build app bundles
+        run: npm run tauri build
+
+      - name: Collect and rename bundle artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.verify-version.outputs.version }}"
+          BUNDLE="src-tauri/target/release/bundle"
+          OUT="dist-release"
+          mkdir -p "$OUT"
+
+          NSIS_SRC="$(find "$BUNDLE/nsis" -name '*-setup.exe' | head -n1)"
+          cp "$NSIS_SRC" "$OUT/Glyph_${VERSION}_x64-setup.exe"
+
+          MSI_SRC="$(find "$BUNDLE/msi" -name '*.msi' | head -n1)"
+          cp "$MSI_SRC" "$OUT/Glyph_${VERSION}_x64.msi"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bundles-windows
+          path: dist-release/*
+
   publish:
     name: Publish GitHub Release
-    needs: [verify-version, build, build-macos]
+    needs: [verify-version, build, build-macos, build-windows]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/download-artifact@v4
