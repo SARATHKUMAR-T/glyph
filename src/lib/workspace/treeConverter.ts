@@ -69,6 +69,7 @@ export function workspaceLayoutToSplitNode(
         title: config?.name || "Terminal",
         cwd: config?.cwd ?? undefined,
         startupCommand: config?.command ?? undefined,
+        startupCommandCaptured: config?.commandCaptured ?? false,
         onConnectionLoss: config?.onConnectionLoss ?? "off",
         status: "starting",
       };
@@ -106,6 +107,7 @@ export function syncTabWithWorkspace(tab: TerminalTabModel, workspace: Workspace
     rootNode = updatePaneInTree(rootNode, pane.id, {
       title: pane.name || "Terminal",
       startupCommand: pane.command ?? undefined,
+      startupCommandCaptured: false,
       onConnectionLoss: pane.onConnectionLoss ?? "off",
     });
   }

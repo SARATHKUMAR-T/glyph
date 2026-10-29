@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
+import { flushSession } from "../../hooks/useSessionPersistence";
 import { isTauriRuntime } from "../../lib/terminal/events";
 
 const CONFIRM_CLOSE_EVENT = "app://confirm-close";
@@ -57,7 +58,9 @@ export function ConfirmCloseModal() {
           <button
             type="button"
             className="btn-glyph btn-glyph-danger"
-            onClick={() => void invoke("quit_app")}
+            // Save first: a Preserve Panes tab's open `ssh` is what comes
+            // back on the next launch, and quitting kills it.
+            onClick={() => void flushSession().finally(() => invoke("quit_app"))}
           >
             Exit &amp; Kill All
           </button>

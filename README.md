@@ -17,7 +17,14 @@ cursors to remappable shortcuts and split panes.
 
 ------------------------------------------------------------------------
 
-## 🆕 What's New in v0.8.0
+## 🆕 What's New in v0.8.1
+
+-   Copying a selection dragged backwards (right to left, or bottom to top) no longer drops its first and last characters
+-   Preserve Panes workspaces reconnect an `ssh` (or `docker exec` / `kubectl exec`) you started by hand, not only a pane's startup command (Linux and macOS)
+
+------------------------------------------------------------------------
+
+## What's New in v0.8.0
 
 -   Glyph now runs on Windows 10 and 11 (x64): a per-user installer (`.exe`) and an `.msi`
 -   On Windows, Glyph starts PowerShell 7 when it's installed, otherwise Windows PowerShell, and opens new terminals in your home folder

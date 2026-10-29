@@ -52,6 +52,15 @@ pub fn terminal_foreground_command(
     manager.foreground_command(&session_id).map_err(Into::into)
 }
 
+/// See `TerminalManager::foreground_argv`.
+#[tauri::command(rename_all = "camelCase", async)]
+pub fn terminal_foreground_argv(
+    manager: State<'_, TerminalManager>,
+    session_id: String,
+) -> Result<Option<Vec<String>>, TerminalErrorPayload> {
+    manager.foreground_argv(&session_id).map_err(Into::into)
+}
+
 /// See `TerminalManager::stop_foreground_job`.
 #[tauri::command(rename_all = "camelCase", async)]
 pub fn terminal_stop_foreground(

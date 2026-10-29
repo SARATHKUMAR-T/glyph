@@ -202,6 +202,23 @@ impl GridEngine {
         } else {
             SelectionType::Simple
         };
+        // The frontend sends the drag's anchor as `start` and the pointer as
+        // `end`, so a right-to-left (or bottom-to-top) drag arrives
+        // reversed. Alacritty orders the points itself but keeps each one's
+        // side, which turns the anchor's `Left` into an end-of-range `Left`
+        // and the pointer's `Right` into a start-of-range `Right` — dropping
+        // the first and last selected cells from the copied text. Ordering
+        // here keeps both ends inclusive, matching what the highlight shows.
+        let (start, end) = if block {
+            (
+                (start.0.min(end.0), start.1.min(end.1)),
+                (start.0.max(end.0), start.1.max(end.1)),
+            )
+        } else if start <= end {
+            (start, end)
+        } else {
+            (end, start)
+        };
         let start_point = Point::new(Line(start.0), Column(start.1));
         let end_point = Point::new(Line(end.0), Column(end.1));
 
@@ -1409,5 +1426,43 @@ mod palette_tests {
             frame.is_some(),
             "a palette change must force a repaint frame even though no cell content changed",
         );
+    }
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+
+    fn engine_with(text: &str) -> GridEngine {
+        let mut engine = GridEngine::new(20, 5, 100);
+        engine.feed(text.as_bytes());
+        engine
+    }
+
+    #[test]
+    fn left_to_right_drag_copies_every_selected_cell() {
+        let mut engine = engine_with("hello world");
+        assert_eq!(engine.selection_text(false, (0, 0), (0, 4)).as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn right_to_left_drag_keeps_the_first_and_last_cells() {
+        let mut engine = engine_with("hello world");
+        assert_eq!(engine.selection_text(false, (0, 4), (0, 0)).as_deref(), Some("hello"));
+    }
+
+    #[test]
+    fn bottom_to_top_drag_keeps_the_first_and_last_cells() {
+        let mut engine = engine_with("first\r\nsecond");
+        assert_eq!(
+            engine.selection_text(false, (1, 5), (0, 0)).as_deref(),
+            Some("first\nsecond"),
+        );
+    }
+
+    #[test]
+    fn block_drag_toward_the_top_left_keeps_every_column() {
+        let mut engine = engine_with("abcd\r\nefgh");
+        assert_eq!(engine.selection_text(true, (1, 2), (0, 1)).as_deref(), Some("bc\nfg"));
     }
 }

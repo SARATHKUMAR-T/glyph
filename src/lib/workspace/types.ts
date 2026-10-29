@@ -13,6 +13,10 @@ export type WorkspacePaneConfig = {
   cwd?: string | null;
   command?: string | CommandConfig | null;
   onConnectionLoss?: ConnectionLossAction;
+  /** Only in the auto-saved session: `command` is a connection the user
+   * started by hand in a Preserve Panes tab, not a configured one, so it's
+   * dropped once that connection is closed. */
+  commandCaptured?: boolean;
 };
 
 export type WorkspaceLayoutNode =
