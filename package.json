@@ -12,6 +12,7 @@
     "tauri:dev": "npm run tauri -- dev",
     "typecheck": "tsc --noEmit",
     "gen:corpus": "node scripts/gen-corpus.mjs",
+    "icons": "node scripts/generate-icons.mjs",
     "test:grid-diff": "cargo test --manifest-path src-tauri/Cargo.toml --test grid_diff && node scripts/grid-diff.mjs"
   },
   "dependencies": {
