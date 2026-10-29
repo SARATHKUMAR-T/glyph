@@ -139,6 +139,13 @@ export async function getForegroundCommand(sessionId: string): Promise<string | 
   return invoke<string | null>("terminal_foreground_command", { sessionId });
 }
 
+/** Full command line of the session's foreground program (e.g.
+ * `["ssh", "user@host"]`), or null while the shell is idle or when the
+ * platform can't report it. */
+export async function getForegroundArgv(sessionId: string): Promise<string[] | null> {
+  return invoke<string[] | null>("terminal_foreground_argv", { sessionId }).catch(() => null);
+}
+
 /** Sends SIGTERM (or SIGKILL with `force`) to the session's foreground job
  * — never the shell itself. */
 export async function stopForegroundJob(sessionId: string, force: boolean): Promise<void> {

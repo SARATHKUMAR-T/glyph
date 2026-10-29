@@ -19,6 +19,8 @@ export type TerminalPaneModel = {
   error?: string;
   title?: string;
   startupCommand?: string | { program: string; args: string[] } | null;
+  /** See `WorkspacePaneConfig.commandCaptured`. */
+  startupCommandCaptured?: boolean;
   /** See `WorkspacePaneConfig.onConnectionLoss`. */
   onConnectionLoss?: "off" | "warn" | "restart";
 };

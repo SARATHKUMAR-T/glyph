@@ -31,6 +31,11 @@ pub struct WorkspacePaneConfig {
     pub command: Option<CommandConfig>,
     #[serde(default)]
     pub on_connection_loss: ConnectionLossAction,
+    /// `command` was captured from a connection the user started by hand
+    /// in a Preserve Panes tab (an `ssh` typed at the prompt), rather than
+    /// configured — so it's dropped again once that connection is closed.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub command_captured: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
