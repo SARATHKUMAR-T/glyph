@@ -531,7 +531,15 @@ export class WebGL2GridRenderer implements GridRenderer {
   }
 
   private resolvedFg(cell: DecodedCell): number {
-    return (cell.flags & CellFlags.INVERSE) !== 0 ? cell.bg : cell.fg;
+    if ((cell.flags & CellFlags.INVERSE) === 0) return cell.fg;
+    // Inverse on the transparent default background (dark themes) would
+    // draw invisible alpha-0 glyphs — use the theme's opaque background as
+    // the ink instead. Same fix as `CanvasGridRenderer.resolvedFg`.
+    if ((cell.bg & 0xff) === 0) {
+      const [r, g, b] = this.themeColor("--glyph-bg", "#000000");
+      return ((Math.round(r * 255) << 24) | (Math.round(g * 255) << 16) | (Math.round(b * 255) << 8) | 0xff) >>> 0;
+    }
+    return cell.bg;
   }
 
   private draw() {
@@ -559,13 +567,16 @@ export class WebGL2GridRenderer implements GridRenderer {
     const plainSelectionBg =
       this.selection && this.selection.kind !== "search" ? this.themeColor("--glyph-selection-bg", "rgba(255, 48, 48, 0.35)") : null;
 
-    // Light themes only: selected glyphs are contrast-checked against the
-    // selection fill (see contrast.ts), so text a program printed in a
-    // color meant for a dark background stays readable once selected.
-    const readableSelection =
-      plainSelectionBg && this.themeVars.get("--glyph-color-scheme") === "light"
-        ? { selectionBg: plainSelectionBg, themeBg: this.themeColor("--glyph-bg", "#ffffff") }
-        : null;
+    // Every theme: selected glyphs are contrast-checked against the
+    // selection fill (see contrast.ts), so text whose color sits close to
+    // the selection tint — dark ANSI colors under a dark theme's
+    // translucent accent, or a dark-terminal color under a light theme's
+    // pale fill — stays readable once selected. Transparent default-bg
+    // cells are composited over the theme background, as the canvas
+    // underneath actually shows. Mirrors `CanvasGridRenderer.effectiveFg`.
+    const readableSelection = plainSelectionBg
+      ? { selectionBg: plainSelectionBg, themeBg: this.themeColor("--glyph-bg", "#000000") }
+      : null;
 
     // --- Backgrounds: one instance per cell that actually has a fill. ---
     // Default-background cells are fully transparent, so they are skipped
@@ -657,14 +668,14 @@ export class WebGL2GridRenderer implements GridRenderer {
         if (inSearchMatch) {
           [r, g, b, a] = searchMatchFg!;
         } else {
-          const packed = inverse ? cell.bg : cell.fg;
+          const packed = this.resolvedFg(cell);
           r = ((packed >>> 24) & 0xff) / 255;
           g = ((packed >>> 16) & 0xff) / 255;
           b = ((packed >>> 8) & 0xff) / 255;
           a = (packed & 0xff) / 255;
         }
         if (readableCols && col >= readableCols[0] && col < readableCols[1]) {
-          const cellBg = unpackRgba(inverse ? cell.fg : cell.bg);
+          const cellBg = unpackRgba(this.resolvedBg(cell));
           const [br, bgG, bb] = cellBg[3] > 0 ? cellBg : readableSelection!.themeBg;
           [r, g, b, a] = pickReadableColor([r, g, b, a], [br, bgG, bb], readableSelection!.selectionBg);
         }

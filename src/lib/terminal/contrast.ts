@@ -26,7 +26,10 @@
  * via `parseCssColorToFloat`/`rgbaToCss`.
  */
 
-const MIN_CONTRAST = 3; // WCAG "large text" minimum; terminal glyph strokes are bold/thick enough to qualify.
+// WCAG AA for normal-size text. Terminal glyphs are ordinary 12-14px body
+// text, not "large text", and the old 3:1 floor let dim ANSI colors
+// (bright-black, Solarized/Nord blues) through as barely-legible smudges.
+const MIN_CONTRAST = 4.5;
 
 export type Rgb = [number, number, number];
 export type Rgba = [number, number, number, number];
