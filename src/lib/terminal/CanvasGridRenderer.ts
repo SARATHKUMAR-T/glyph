@@ -377,8 +377,14 @@ export class CanvasGridRenderer implements GridRenderer {
 
   private resolvedFg(cell: DecodedCell): string {
     const inverse = (cell.flags & CellFlags.INVERSE) !== 0;
-    const packed = inverse ? cell.bg : cell.fg;
-    return packedColorToCss(packed);
+    if (!inverse) return packedColorToCss(cell.fg);
+    // Dark themes leave the default background fully transparent (see
+    // `themeToEnginePalette`), so an inverse cell on it would otherwise
+    // draw its glyphs in alpha 0 — invisible text on a solid fg-colored
+    // block (status bars, `less`/`man` prompts, fzf's current line).
+    // Use the theme's own opaque background as the ink instead.
+    if ((cell.bg & 0xff) === 0) return this.themeColor("--glyph-bg", "#000000");
+    return packedColorToCss(cell.bg);
   }
 
   private styleKey(cell: DecodedCell, row: number, col: number): string {
