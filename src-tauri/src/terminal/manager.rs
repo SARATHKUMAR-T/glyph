@@ -199,6 +199,14 @@ impl TerminalManager {
         Ok(self.foreground_job(session_id)?.map(process_name))
     }
 
+    /// Full command line (`argv`) of the program running in the foreground
+    /// (e.g. `["ssh", "user@host"]`), or `None` while the shell is idle or
+    /// when the platform can't report it. Lets Preserve Panes reopen a
+    /// connection the user started by hand.
+    pub fn foreground_argv(&self, session_id: &str) -> Result<Option<Vec<String>>, TerminalError> {
+        Ok(self.foreground_job(session_id)?.and_then(process_argv))
+    }
+
     /// Signals the foreground job's whole process group — SIGTERM, or
     /// SIGKILL with `force` — to stop a command that ignores Ctrl+C (a
     /// frozen network connection). Never touches the shell itself: an idle
@@ -342,6 +350,71 @@ fn process_name(_pid: u32) -> String {
     String::new()
 }
 
+#[cfg(target_os = "linux")]
+fn process_argv(pid: u32) -> Option<Vec<String>> {
+    let raw = std::fs::read(format!("/proc/{pid}/cmdline")).ok()?;
+    // Each argument is NUL-terminated; empty arguments (`ssh host ""`) are kept.
+    let args: Vec<String> = raw
+        .strip_suffix(&[0])?
+        .split(|&byte| byte == 0)
+        .map(|arg| String::from_utf8_lossy(arg).into_owned())
+        .collect();
+    (!args.is_empty()).then_some(args)
+}
+
+/// Reads `KERN_PROCARGS2`: an `argc` int, the executable path, NUL
+/// padding, then `argc` NUL-terminated arguments (environment follows).
+#[cfg(target_os = "macos")]
+fn process_argv(pid: u32) -> Option<Vec<String>> {
+    let mut mib = [libc::CTL_KERN, libc::KERN_PROCARGS2, pid as libc::c_int];
+    let mut size: libc::size_t = 0;
+    // SAFETY: a null buffer asks the kernel for the size it needs.
+    let status = unsafe {
+        libc::sysctl(
+            mib.as_mut_ptr(),
+            3,
+            std::ptr::null_mut(),
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if status != 0 || size == 0 {
+        return None;
+    }
+    let mut buf = vec![0u8; size];
+    // SAFETY: `buf` is a writable buffer of exactly `size` bytes.
+    let status = unsafe {
+        libc::sysctl(
+            mib.as_mut_ptr(),
+            3,
+            buf.as_mut_ptr().cast(),
+            &mut size,
+            std::ptr::null_mut(),
+            0,
+        )
+    };
+    if status != 0 {
+        return None;
+    }
+    buf.truncate(size);
+    let argc = i32::from_ne_bytes(buf.get(..4)?.try_into().ok()?) as usize;
+    let rest = &buf[4..];
+    let rest = &rest[rest.iter().position(|&byte| byte == 0)?..];
+    let rest = &rest[rest.iter().position(|&byte| byte != 0)?..];
+    let args: Vec<String> = rest
+        .split(|&byte| byte == 0)
+        .take(argc)
+        .map(|arg| String::from_utf8_lossy(arg).into_owned())
+        .collect();
+    (argc > 0 && args.len() == argc).then_some(args)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+fn process_argv(_pid: u32) -> Option<Vec<String>> {
+    None
+}
+
 #[cfg(target_os = "macos")]
 fn macos_process_cwd(pid: u32) -> Option<String> {
     use std::ffi::CStr;
@@ -375,4 +448,26 @@ fn macos_process_cwd(pid: u32) -> Option<String> {
         .and_then(|path| path.to_str().ok())
         .filter(|path| !path.is_empty())
         .map(str::to_string)
+}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::process_argv;
+    use std::process::Command;
+
+    #[test]
+    fn reads_a_running_programs_full_command_line() {
+        // The trailing `: ` keeps `sh` from exec'ing `sleep` in its place.
+        let mut child = Command::new("sh")
+            .args(["-c", "sleep 30; :", "sh", ""])
+            .spawn()
+            .expect("spawn sh");
+        // Give the exec a moment to replace the forked image.
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        let argv = process_argv(child.id());
+        let _ = child.kill();
+        let _ = child.wait();
+        let expected = ["sh", "-c", "sleep 30; :", "sh", ""].map(String::from).to_vec();
+        assert_eq!(argv, Some(expected));
+    }
 }

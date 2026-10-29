@@ -381,6 +381,7 @@ mod tests {
                         args: vec!["run".to_string(), "dev".to_string()],
                     }),
                     on_connection_loss: Default::default(),
+                    command_captured: false,
                 },
                 WorkspacePaneConfig {
                     id: "pane-2".to_string(),
@@ -388,6 +389,7 @@ mod tests {
                     cwd: Some("/home/user/projects/backend".to_string()),
                     command: Some(CommandConfig::Raw("cargo run".to_string())),
                     on_connection_loss: Default::default(),
+                    command_captured: false,
                 },
             ],
             preserve_panes: false,
@@ -442,6 +444,7 @@ mod tests {
             cwd: None,
             command: None,
             on_connection_loss: Default::default(),
+            command_captured: false,
         });
 
         let err = manager.save_workspace(ws).unwrap_err();
@@ -473,6 +476,7 @@ mod tests {
                     cwd: Some("/home/user".to_string()),
                     command: None,
                     on_connection_loss: Default::default(),
+                    command_captured: false,
                 }],
                 preserve_panes: false,
                 workspace_id: None,
@@ -511,6 +515,7 @@ mod tests {
             cwd: None,
             command: None,
             on_connection_loss: Default::default(),
+            command_captured: false,
         });
 
         let err = manager.save_session(&session).unwrap_err();
