@@ -17,7 +17,14 @@ cursors to remappable shortcuts and split panes.
 
 ------------------------------------------------------------------------
 
-## 🆕 What's New in v0.7.2
+## 🆕 What's New in v0.7.3
+
+-   Selected text stays readable in every theme, including dark themes where dark or accent-colored text used to fade into the selection
+-   Inverse text (status bars, `less` and `man` prompts) is visible again on dark themes
+
+------------------------------------------------------------------------
+
+## What's New in v0.7.2
 
 -   macOS: native red, yellow and green window buttons at the top left, in place of Glyph's own buttons at the top right
 -   macOS: windows resize from their edges natively
