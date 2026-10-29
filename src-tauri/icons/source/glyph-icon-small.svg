@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Glyph app icon, small: drawn on a 16x16 pixel grid (64 units per
+       pixel) so every edge lands on a whole pixel at 16 and 32 px. -->
+  <rect x="0" y="0" width="1024" height="1024" rx="224" fill="#0B0B0E"/>
+  <rect x="16" y="16" width="992" height="992" rx="208" fill="none" stroke="#FFFFFF" stroke-opacity="0.14" stroke-width="32"/>
+  <polyline points="224,256 448,480 224,704" fill="none" stroke="#F5F5F5" stroke-width="128" stroke-linecap="butt" stroke-linejoin="miter"/>
+  <rect x="576" y="640" width="256" height="128" fill="#FF3030"/>
+</svg>
