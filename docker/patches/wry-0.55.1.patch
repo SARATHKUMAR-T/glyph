@@ -1,0 +1,61 @@
+WebKitGTK 2.38 (Ubuntu 20.04) has no webkit_uri_scheme_request_get_http_body(),
+which wry's "linux-body" feature needs -- that feature is enabled unconditionally
+by tauri-runtime-wry, so it cannot simply be turned off.
+
+This patch moves the 2.40-only body read behind a new opt-in feature, leaving
+"linux-body" defined but inert. Requests that carry a body are failed rather than
+delivered with a silently empty one, which makes Tauri fall back to its
+postMessage IPC interface (the same fallback it uses when a CSP blocks the custom
+protocol). invoke()/listen() work normally over that path.
+
+diff -ruN orig/Cargo.toml new/Cargo.toml
+--- orig/Cargo.toml	2006-07-24 06:51:28.000000000 +0530
++++ new/Cargo.toml	2026-08-26 13:04:22.672479811 +0530
+@@ -55,6 +55,9 @@
+ devtools = []
+ fullscreen = []
+ linux-body = [
++    "os-webview",
++]
++linux-body-webkitgtk-2-40 = [
+     "webkit2gtk/v2_40",
+     "os-webview",
+ ]
+diff -ruN orig/src/webkitgtk/web_context.rs new/src/webkitgtk/web_context.rs
+--- orig/src/webkitgtk/web_context.rs	2006-07-24 06:51:28.000000000 +0530
++++ new/src/webkitgtk/web_context.rs	2026-08-26 13:04:22.736480816 +0530
+@@ -173,7 +173,7 @@
+         }
+ 
+         let body;
+-        #[cfg(feature = "linux-body")]
++        #[cfg(feature = "linux-body-webkitgtk-2-40")]
+         {
+           use gtk::{gdk::prelude::InputStreamExtManual, gio::Cancellable};
+ 
+@@ -199,8 +199,24 @@
+             })
+             .unwrap_or_default();
+         }
+-        #[cfg(not(feature = "linux-body"))]
++        #[cfg(not(feature = "linux-body-webkitgtk-2-40"))]
+         {
++          // WebKitGTK < 2.40 has no webkit_uri_scheme_request_get_http_body(),
++          // so a request body simply cannot be read here. Silently substituting
++          // an empty body would hand the protocol handler a corrupt request, so
++          // fail the request instead and let the caller fall back to another
++          // transport (Tauri falls back to the postMessage IPC interface).
++          if http_request
++            .method_ref()
++            .map(|m| m.as_str())
++            .is_some_and(|m| !matches!(m, "GET" | "HEAD" | "OPTIONS" | "TRACE"))
++          {
++            request.finish_error(&mut gtk::glib::Error::new(
++              glib::UriError::Failed,
++              "Request bodies over custom protocols require WebKitGTK 2.40 or newer.",
++            ));
++            return;
++          }
+           body = Vec::new();
+         }
+ 
