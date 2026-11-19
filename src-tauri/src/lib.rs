@@ -1,5 +1,7 @@
 mod commands;
 mod data_migration;
+#[cfg(target_os = "linux")]
+mod desktop_shortcut;
 mod events;
 pub mod terminal;
 mod tray;
@@ -86,6 +88,8 @@ pub fn run() {
                 }
             }
             tray::setup(app);
+            #[cfg(target_os = "linux")]
+            desktop_shortcut::setup(app);
             Ok(())
         })
         .run(tauri::generate_context!());

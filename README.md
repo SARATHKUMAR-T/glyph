@@ -17,7 +17,14 @@ cursors to remappable shortcuts and split panes.
 
 ------------------------------------------------------------------------
 
-## 🆕 What's New in v0.8.1
+## 🆕 What's New in v0.8.2
+
+-   Press **Ctrl+Alt+G** anywhere to open a new Glyph window, the way Ctrl+Alt+T opens the default terminal (GNOME / Ubuntu). Glyph adds the shortcut the first time it starts and never overwrites a shortcut you already have on Ctrl+Alt+G. To change or remove it, go to Settings → Keyboard → Custom Shortcuts
+-   Double-clicking a word selects it again, and triple-clicking selects the whole line. The selection used to disappear as soon as the mouse button was released
+
+------------------------------------------------------------------------
+
+## What's New in v0.8.1
 
 -   Copying a selection dragged backwards (right to left, or bottom to top) no longer drops its first and last characters
 -   Preserve Panes workspaces reconnect an `ssh` (or `docker exec` / `kubectl exec`) you started by hand, not only a pane's startup command (Linux and macOS)
