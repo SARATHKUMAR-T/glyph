@@ -369,6 +369,10 @@ export function GlyphEngineTerminalView({
     time: 0,
     count: 0,
   });
+  /** Set when a press was a double/triple click that already made its
+   * word/line selection, so the matching `pointerup` keeps it instead of
+   * treating the release as a plain click (which clears the selection). */
+  const multiClickRef = useRef(false);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -967,9 +971,12 @@ export function GlyphEngineTerminalView({
 
     const now = event.timeStamp;
     const lastClick = clickTrackRef.current;
-    const sameSpot = lastClick.row === cell.row && lastClick.col === cell.col;
+    // Same row, and within one column, so a hand that drifts a pixel
+    // across a cell edge between clicks still counts as a double-click.
+    const sameSpot = lastClick.row === cell.row && Math.abs(lastClick.col - cell.col) <= 1;
     const clickCount = sameSpot && now - lastClick.time < MULTI_CLICK_MS ? Math.min(lastClick.count + 1, 3) : 1;
     clickTrackRef.current = { row: cell.row, col: cell.col, time: now, count: clickCount };
+    multiClickRef.current = clickCount >= 2;
 
     // Double/triple-click select the word/line under the pointer — on a
     // blank cell or an empty line there's nothing to select, so the click
@@ -1096,6 +1103,13 @@ export function GlyphEngineTerminalView({
     if (event.button !== 0) return;
     const drag = dragRef.current;
     dragRef.current = null;
+
+    // The press was a double/triple click: its word/line selection is
+    // already made, so the release must not clear it or open a link.
+    if (multiClickRef.current) {
+      multiClickRef.current = false;
+      return;
+    }
 
     if (drag && drag.moved && renderer) {
       const cell = pixelToCell(event.clientX, event.clientY) ?? { row: drag.row, col: drag.col };
