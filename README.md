@@ -17,7 +17,14 @@ cursors to remappable shortcuts and split panes.
 
 ------------------------------------------------------------------------
 
-## 🆕 What's New in v0.8.2
+## 🆕 What's New in v0.8.3
+
+-   The **Ctrl+Alt+G** shortcut is sturdier. Glyph checks it every time it starts: if it points to an AppImage that has been moved, renamed or replaced, it is pointed at the copy of Glyph you're running. If Ctrl+Alt+G was taken by another shortcut, Glyph tries again on a later start once the key is free, instead of giving up for good
+-   Setting up the shortcut from the AppImage now talks to the desktop's own settings, not the copies bundled inside the AppImage
+
+------------------------------------------------------------------------
+
+## What's New in v0.8.2
 
 -   Press **Ctrl+Alt+G** anywhere to open a new Glyph window, the way Ctrl+Alt+T opens the default terminal (GNOME / Ubuntu). Glyph adds the shortcut the first time it starts and never overwrites a shortcut you already have on Ctrl+Alt+G. To change or remove it, go to Settings → Keyboard → Custom Shortcuts
 -   Double-clicking a word selects it again, and triple-clicking selects the whole line. The selection used to disappear as soon as the mouse button was released
